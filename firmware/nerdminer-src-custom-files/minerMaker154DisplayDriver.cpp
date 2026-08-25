@@ -92,15 +92,34 @@ static void mm_header(const char *title, const String &time) {
   mm_wifiIcon(236 - wifiW - 20, 5, mm_wifiBars());
 }
 
-// Draws `value` centered on (cx, topY) using the digital font, returns its height
-static void mm_bigNumber(const String &value, int cx, int topY, int fontSize, uint16_t fg, uint16_t bg) {
+// Clip subsequent drawing to a rect, in the same absolute sprite
+// coordinates used everywhere else (vpDatum=false) - i.e. an "overflow:
+// hidden" container. Cheap insurance against any value/label that turns
+// out longer than expected spilling into a neighbour or off the panel,
+// instead of hand-fitting every possible string length up front.
+static void mm_clipBegin(int x, int y, int w, int h) { mm_bg.setViewport(x, y, w, h, false); }
+static void mm_clipEnd() { mm_bg.resetViewport(); }
+
+// Draws `value` centered on (cx, topY) using the digital font, shrinking
+// the font size (down to a floor) if it doesn't fit within maxWidth -
+// values coming off the network (price, hashrate, block height, ...) can
+// be a digit or two longer or shorter than whatever we last eyeballed.
+static void mm_bigNumber(const String &value, int cx, int topY, int maxFontSize, int maxWidth, uint16_t fg, uint16_t bg) {
+  int fontSize = maxFontSize;
   mm_render.setFontSize(fontSize);
   uint32_t w = mm_render.getTextWidth(value.c_str());
+  while (w > (uint32_t)maxWidth && fontSize > 12) {
+    fontSize -= 2;
+    mm_render.setFontSize(fontSize);
+    w = mm_render.getTextWidth(value.c_str());
+  }
   mm_render.drawString(value.c_str(), cx - (int)w / 2, topY, fg, bg);
 }
 
 static void mm_statCell(int x, int y, int w, int h, const char *label, const String &value) {
   mm_bg.drawRect(x, y, w, h, MM_DARK);
+
+  mm_clipBegin(x + 1, y + 1, w - 2, h - 2);
   mm_bg.setFreeFont(&FreeSans9pt7b);
   mm_bg.setTextColor(MM_GREY, TFT_BLACK);
   mm_bg.setTextDatum(TL_DATUM);
@@ -110,6 +129,7 @@ static void mm_statCell(int x, int y, int w, int h, const char *label, const Str
   mm_bg.setTextColor(TFT_WHITE, TFT_BLACK);
   mm_bg.setTextDatum(BL_DATUM);
   mm_bg.drawString(value, x + 6, y + h - 6);
+  mm_clipEnd();
 }
 
 // ---------------------------------------------------------------------------
@@ -179,17 +199,19 @@ void minerMaker154_MinerScreen(unsigned long mElapsed) {
   // Blue hero box: valid blocks (left) + hashrate (right)
   mm_bg.fillRect(4, 38, 232, 52, MM_BLUE);
   mm_bg.drawFastVLine(72, 38, 52, TFT_BLACK);
+  mm_clipBegin(4, 38, 232, 52);
   mm_bg.setFreeFont(&FreeSansBold9pt7b);
   mm_bg.setTextColor(TFT_WHITE, MM_BLUE);
   mm_bg.setTextDatum(TC_DATUM);
   mm_bg.drawString("BLOCKS", 38, 44);
-  mm_bigNumber(data.valids, 38, 60, 18, TFT_WHITE, MM_BLUE);
+  mm_bigNumber(data.valids, 38, 60, 18, 60, TFT_WHITE, MM_BLUE);
 
-  mm_bigNumber(data.currentHashRate, 160, 46, 26, TFT_WHITE, MM_BLUE);
+  mm_bigNumber(data.currentHashRate, 158, 42, 26, 132, TFT_WHITE, MM_BLUE);
   mm_bg.setFreeFont(&FreeSans9pt7b);
   mm_bg.setTextColor(TFT_WHITE, MM_BLUE);
   mm_bg.setTextDatum(TR_DATUM);
-  mm_bg.drawString("KH/s", 230, 78);
+  mm_bg.drawString("KH/s", 230, 82);
+  mm_clipEnd();
 
   // 2x2 stat grid
   mm_statCell(4,   96, 114, 64, "TEMPLATES", data.templates);
@@ -209,11 +231,13 @@ void minerMaker154_ClockScreen(unsigned long mElapsed) {
   mm_bg.fillSprite(TFT_BLACK);
   mm_header("CLOCK", data.currentTime);
 
-  mm_bigNumber(data.currentTime, 120, 42, 74, MM_YELLOW, TFT_BLACK);
+  mm_clipBegin(0, 36, 240, 74);
+  mm_bigNumber(data.currentTime, 120, 40, 60, 224, MM_YELLOW, TFT_BLACK);
+  mm_clipEnd();
 
-  mm_statCell(4,   126, 232, 38, "BTC PRICE", data.btcPrice);
-  mm_statCell(4,   168, 114, 38, "HASHRATE (KH/s)", data.currentHashRate);
-  mm_statCell(122, 168, 114, 38, "SHARES", data.completedShares);
+  mm_statCell(4,   114, 232, 36, "BTC PRICE", data.btcPrice);
+  mm_statCell(4,   154, 114, 36, "HASHRATE", data.currentHashRate + " KH/s");
+  mm_statCell(122, 154, 114, 36, "SHARES", data.completedShares);
 
   mm_bg.pushSprite(0, 0);
 }
@@ -234,6 +258,7 @@ void minerMaker154_WifiInfoScreen(unsigned long mElapsed) {
   mm_statCell(122, 82, 114, 40, "SIGNAL", rssi);
 
   mm_bg.fillRect(4, 128, 232, 100, MM_BLUE);
+  mm_clipBegin(4, 128, 232, 100);
   mm_bg.setFreeFont(&FreeSansBold9pt7b);
   mm_bg.setTextColor(TFT_WHITE, MM_BLUE);
   mm_bg.setTextDatum(TL_DATUM);
@@ -249,6 +274,7 @@ void minerMaker154_WifiInfoScreen(unsigned long mElapsed) {
   mm_bg.setTextColor(TFT_WHITE, MM_BLUE);
   mm_bg.drawString(String("user: ") + MM_WEB_USER, 10, 196);
   mm_bg.drawString(String("pass: ") + MM_WEB_PASS, 10, 214);
+  mm_clipEnd();
 
   mm_bg.pushSprite(0, 0);
 }
@@ -263,12 +289,14 @@ void minerMaker154_GlobalHashScreen(unsigned long mElapsed) {
   mm_bg.setTextColor(MM_GREY, TFT_BLACK);
   mm_bg.setTextDatum(TC_DATUM);
   mm_bg.drawString("BLOCK HEIGHT", 120, 30);
-  mm_bigNumber(data.blockHeight, 120, 44, 22, TFT_WHITE, TFT_BLACK);
+  mm_clipBegin(0, 42, 240, 30);
+  mm_bigNumber(data.blockHeight, 120, 44, 22, 224, TFT_WHITE, TFT_BLACK);
+  mm_clipEnd();
 
   mm_statCell(4,   96, 114, 54, "GLOBAL HASH", data.globalHashRate);
   mm_statCell(122, 96, 114, 54, "DIFFICULTY", data.netwrokDifficulty);
   mm_statCell(4,   154, 114, 54, "FEE (sat/vB)", data.halfHourFee);
-  mm_statCell(122, 154, 114, 54, "BLOCKS LEFT", data.remainingBlocks);
+  mm_statCell(122, 154, 114, 54, "HALVING IN", data.remainingBlocks);
 
   // Halving progress bar
   mm_bg.drawRect(4, 212, 232, 18, MM_DARK);
@@ -288,9 +316,11 @@ static void minerMaker154_StatusScreen(void) {
   mm_bg.fillSprite(TFT_BLACK);
   mm_header("STATUS", data.currentTime);
 
-  mm_bigNumber(data.currentTime, 120, 60, 30, TFT_WHITE, TFT_BLACK);
+  mm_clipBegin(0, 58, 240, 40);
+  mm_bigNumber(data.currentTime, 120, 60, 30, 224, TFT_WHITE, TFT_BLACK);
+  mm_clipEnd();
 
-  mm_statCell(4,   140, 114, 44, "HASHRATE (KH/s)", data.currentHashRate);
+  mm_statCell(4,   140, 114, 44, "HASHRATE", data.currentHashRate + " KH/s");
   mm_statCell(122, 140, 114, 44, "SHARES", data.completedShares);
   mm_bg.setFreeFont(&FreeSans9pt7b);
   mm_bg.setTextColor(MM_GREY, TFT_BLACK);

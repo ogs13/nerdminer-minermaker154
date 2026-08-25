@@ -179,6 +179,25 @@ documented above.
   board). Written only from the manual toggle
   (`minerMaker154_AlternateScreenState()`); the temporary auto-wake fades
   intentionally don't touch it.
+- **Every stat box clips its own text** (`mm_clipBegin()`/`mm_clipEnd()`,
+  thin wrappers around `TFT_eSprite::setViewport(x,y,w,h,false)` /
+  `resetViewport()` — `vpDatum=false` keeps coordinates absolute/sprite-
+  space, so existing draw calls don't need rewriting relative to the
+  viewport). `mm_statCell()` clips internally; screens that draw directly
+  into a decorative box (the Mining screen's blue hero box, the Wi-Fi/Web
+  settings box) wrap that region the same way. This was added after real
+  hardware photos showed labels/values bleeding into their neighbour or
+  off the panel edge (`GLOBAL HASH`/`DIFFICULTY` merging, `HASHRATE (KH/s)`
+  running into `SHARES`, `BLOCKS LEFT`'s value running off-screen) — don't
+  add a new stat box or hero number without clipping it the same way,
+  since upstream's data strings (price, hashrate, block height, ...) vary
+  in length and nothing here previously guaranteed they'd fit.
+- **`mm_bigNumber()` auto-shrinks to fit**: it takes `maxFontSize` and
+  `maxWidth`, measures via `OpenFontRender::getTextWidth()`, and steps the
+  font size down (in 2px steps, floor 12px) until the string fits before
+  drawing — rather than a single hardcoded size that happens to fit
+  whatever value was on screen when it was tuned. Wrap its call site in
+  `mm_clipBegin`/`mm_clipEnd` too as a backstop.
 - **CSS gotcha**: don't reuse a `0xRRGGBB`-style RGB565 display color
   literal (e.g. `MM_YELLOW`/`0xFEA0`) as a CSS hex color string in
   `webSettings.cpp`'s HTML. A 4-hex-digit CSS color is `#RGBA` shorthand,

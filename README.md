@@ -146,8 +146,15 @@ Beyond the base mining/clock screens, the `MinerMaker154` display driver adds:
   and then power-cycle the device, it comes back up with the screen still
   off (instead of always waking up lit). Stored in its own NVS namespace,
   separate from the wallet/pool settings.
-- **Larger clock digits** on the Clock screen (font size 74 vs. the
-  original 34) for better readability at a glance.
+- **Larger clock digits** on the Clock screen (font size 60 vs. the
+  original 34) for better readability at a glance, sized to reliably fit
+  the panel width rather than a fixed guess.
+- **Overflow-safe layout**: every stat box now clips its own text instead
+  of letting a long label/value bleed into its neighbour or off the right
+  edge of the panel, and the big "hero" numbers (clock, hashrate, block
+  height) auto-shrink their font size if the actual value turns out wider
+  than expected - both were real, hardware-caught bugs (see "Compatibility
+  & testing status").
 - **Wi-Fi signal bars** in the header (from `WiFi.RSSI()`) instead of a
   plain connected/not-connected dot.
 
@@ -196,6 +203,14 @@ compiled:
   color literal for yellow) as if it were a 4-digit CSS hex color, which
   browsers parse as `#FFEEAA00` - fully transparent alpha. Fixed to a
   proper 6-digit hex.
+- Photos of the Clock and Network screens caught real layout bugs: the
+  enlarged clock digits overflowed off the right edge of the panel and
+  visually collided with the BTC price box below them, and two pairs of
+  stat-box labels ("GLOBAL HASH"/"DIFFICULTY", "HASHRATE (KH/s)"/"SHARES")
+  ran into each other or off-panel because nothing clipped text to its
+  box. Fixed generally (every stat box now clips its own text; the big
+  numbers auto-shrink to fit) rather than just re-tuning the specific
+  strings seen in those photos - see "Custom UI & features".
 - Still not independently confirmed on hardware: the exact on-screen
   layout/spacing of the new screens, whether the setup-screen QR code
   scans cleanly on a real panel (that path only runs during initial Wi-Fi
