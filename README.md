@@ -152,12 +152,11 @@ Beyond the base mining/clock screens, the `MinerMaker154` display driver adds:
 - **Digital-display styling throughout**: every stat box value (not just
   the hero hashrate/clock) now uses the same 7-segment-style font as the
   reference vendor look, closer to the original photo.
-- **Overflow-safe layout**: every stat box now clips its own text instead
-  of letting a long label/value bleed into its neighbour or off the right
+- **Overflow-safe layout**: every stat box clips its own text instead of
+  letting a long label/value bleed into its neighbour or off the right
   edge of the panel, and the big "hero" numbers (clock, hashrate, block
-  height) auto-shrink their font size if the actual value turns out wider
-  than expected - both were real, hardware-caught bugs (see "Compatibility
-  & testing status").
+  height) auto-shrink their font size to fit whatever the actual value
+  turns out to be.
 - **Wi-Fi signal bars** in the header (from `WiFi.RSSI()`) instead of a
   plain connected/not-connected dot.
 
@@ -181,87 +180,14 @@ esp32_miner/
 
 ## Compatibility & testing status
 
-Both the base mining firmware and the UI update described above have now
-been **flashed to and run on a real physical unit** (mine), not just
-compiled:
-
-- The base mining firmware ran 12h+ continuously before the UI update.
-- The UI update (restyled screens, Network/Wi-Fi-Web screens, QR code, true
-  backlight-off, auto-wake, settings web page) was flashed on top using
-  `scripts/safe_reflash.sh` (app-partition-only, no erase) and confirmed
-  booting and mining normally afterward, with the pre-existing wallet/pool/
-  Wi-Fi settings and the mining stat counters (accumulated over the prior
-  12h) intact and unaffected by the update.
-- The 3+-click backlight toggle initially fired correctly (confirmed via
-  serial log) but had no visible effect - root cause found and fixed on
-  real hardware: `TFT_eSPI`'s own `init()` does
-  `pinMode(TFT_BL, OUTPUT); digitalWrite(TFT_BL, ...)` internally
-  (`TFT_eSPI.cpp`, guarded by `#if defined(TFT_BL) && defined(TFT_BACKLIGHT_ON)`),
-  which silently detaches any LEDC/PWM binding made on that pin *before*
-  calling `tft.init()`. Fixed by reordering `minerMaker154_Init()` to claim
-  the pin for PWM *after* `tft.init()` - confirmed working (smooth fade,
-  both directions) after reflashing.
-- The settings web page's "Save & restart" button was invisible in a
-  browser - root cause: its CSS used `#FEA0` (the display code's RGB565
-  color literal for yellow) as if it were a 4-digit CSS hex color, which
-  browsers parse as `#FFEEAA00` - fully transparent alpha. Fixed to a
-  proper 6-digit hex.
-- Photos of the Clock and Network screens caught real layout bugs: the
-  enlarged clock digits overflowed off the right edge of the panel and
-  visually collided with the BTC price box below them, and two pairs of
-  stat-box labels ("GLOBAL HASH"/"DIFFICULTY", "HASHRATE (KH/s)"/"SHARES")
-  ran into each other or off-panel because nothing clipped text to its
-  box. Fixed generally (every stat box now clips its own text; the big
-  numbers auto-shrink to fit) rather than just re-tuning the specific
-  strings seen in those photos - see "Custom UI & features".
-- A second round of photos caught a follow-up: the stat-box clipping fix
-  worked (labels/values now cut cleanly instead of overlapping a
-  neighbour), but the Clock screen's big digits *still* overlapped the BTC
-  price box below - because the "clip the container" fix doesn't apply to
-  them. The digital-font hero numbers (clock, hashrate, block height) are
-  drawn by `OpenFontRender` straight into the sprite buffer, which does
-  **not** respect `TFT_eSprite::setViewport()` clipping the way normal
-  `drawString()` calls do. Fixed by making `mm_bigNumber()` measure the
-  actual rendered height via `OpenFontRender::getTextHeight()` and shrink
-  the font until it truly fits, instead of relying on a clip that silently
-  didn't apply to it.
-- A *third* round of photos showed that fix worked for the Network
-  screen's block height (pure digits) but the Clock screen was still
-  overlapping - narrowing it down to strings containing `:`, specifically:
-  `OpenFontRender::getTextHeight()` under-reports the height of a string
-  with a colon in this font, so the auto-shrink loop thought it fit when
-  it didn't. Worked around by moving the Clock and auto-wake Status
-  screens off `OpenFontRender` entirely, onto the bundled `DSEG7` bitmap
-  `GFXfont` (a real GFXfont, sized via `setTextSize()`, measured with the
-  ordinary and reliable `textWidth()`) — see "Custom UI & features" for
-  the resulting full-screen Clock redesign.
-- Applying that same digital font to *every* stat-box value (to match the
-  reference look) broke any value containing a letter — a 7-segment font
-  only has clean glyphs for digits/punctuation, so "1 sat/vB" rendered as
-  garbled segments, and same for the Wi-Fi screen's SSID and "-53 dBm"
-  signal reading. Fixed by only using the digital font for values that are
-  actually just digits/`.`/`,`/`%`/`-` (`mm_isDigital()`), falling back to
-  the normal bold sans font for anything else. Found alongside a related
-  bug: `mm_statCell()` left the digital font selected as global state
-  afterward, so unrelated text drawn right after it on the same screen
-  (the Network screen's "Halving NN%" progress-bar label) silently
-  inherited it too — fixed by having `mm_statCell()` always restore the
-  normal font before returning.
-- Still not independently confirmed on hardware: the exact on-screen
-  layout/spacing of the new screens, whether the setup-screen QR code
-  scans cleanly on a real panel (that path only runs during initial Wi-Fi
-  setup, not exercised by an in-place update), and whether the 15-minute
-  auto-wake timing feels right day-to-day.
-
-**A note for anyone using `scripts/safe_reflash.sh`'s backup feature:**
-on this unit, `esptool`'s `read-flash` reliably stalled
-(`Packet content transfer stopped`) at the same absolute flash address on
-every attempt, regardless of baud rate or where the read started - a
-quirk of continuous reads over this chip's native USB-Serial/JTAG mode,
-not a bad cable. The script now reads the backup in small chunks (separate
-connections) to work around it; `write-flash` itself was unaffected (it
-uses a different, block-acknowledged protocol and self-verifies via a
-hash check) and completed correctly on the first try.
+Both the base mining firmware and the UI described above have been
+**flashed to and run on a real physical unit** (mine) — not just
+compiled. The base firmware ran 12h+ continuously before the UI was added;
+the UI went through several rounds of hardware testing and photo-driven
+fixes (font rendering, layout, backlight control) via
+`scripts/safe_reflash.sh`, each time confirmed booting and mining normally
+afterward with the pre-existing wallet/pool/Wi-Fi settings and accumulated
+mining stats untouched.
 
 It should work as-is on any board matching the hardware description above
 (same "ESP32S3 1.54 TFT LCD V1.0" / ZJYUNJIE board, same ESP32-S3-WROOM-1
@@ -272,9 +198,15 @@ from AliExpress, there could in principle be undocumented hardware
 revisions (different flash/PSRAM size, a shifted pin) this hasn't been
 tested against.
 
+**A note on `esptool` and this board:** its native USB-Serial/JTAG mode
+can stall on a large continuous `read-flash` (a quirk of the chip/tool
+combination, not a bad cable) — `scripts/safe_reflash.sh` already works
+around this by reading its pre-update backup in small chunks; `write-flash`
+itself is unaffected.
+
 **If you flash this and it works (or doesn't), please open an issue** —
-that feedback is exactly what turns "works on my unit" / "compiles" into
-"confirmed working for this board."
+that feedback is exactly what turns "works on my unit" into "confirmed
+working for this board."
 
 ## How to reflash (if needed)
 
@@ -384,8 +316,7 @@ device does **not** reset them.
 ## Possible next steps (not done, optional)
 
 - Confirm the setup-screen QR code actually scans well on a real phone
-  camera (only exercised on a fresh Wi-Fi setup, not an in-place update —
-  see "Compatibility & testing status").
+  camera (only exercised on a fresh Wi-Fi setup, not an in-place update).
 - Tune the auto-wake interval/duration (`AUTO_WAKE_INTERVAL_MS` /
   `AUTO_WAKE_DURATION_MS` in `minerMaker154DisplayDriver.cpp`) to taste.
 - The settings-page password (`MM_WEB_USER`/`MM_WEB_PASS` in
