@@ -15,14 +15,8 @@ extern nvMemory nvMem;
 
 // Separate port from the WiFiManager captive portal (80), which is only
 // alive during initial setup anyway - avoids any doubt about clashing.
-static WebServer mmServer(8080);
+static WebServer mmServer(MM_WEB_PORT);
 static bool mmServerStarted = false;
-
-// Fixed credentials for the settings page - not configurable, same trust
-// tier as the setup AP's own hardcoded password (MineYourCoins). Good
-// enough to keep it off casual snooping on the home LAN, nothing more.
-#define MM_WEB_USER "admin"
-#define MM_WEB_PASS "MinerMaker154"
 
 static bool mmRequireAuth() {
   if (mmServer.authenticate(MM_WEB_USER, MM_WEB_PASS)) return true;

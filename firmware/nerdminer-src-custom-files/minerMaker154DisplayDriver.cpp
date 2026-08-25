@@ -110,15 +110,20 @@ static void mm_statCell(int x, int y, int w, int h, const char *label, const Str
 
 void minerMaker154_Init(void) {
   Serial.println("MinerMaker 1.54 (240x240 ST7789 SPI) display driver initialized");
-  ledcSetup(MM_BL_CHANNEL, MM_BL_FREQ, MM_BL_RES);
-  ledcAttachPin(TFT_BL, MM_BL_CHANNEL);
-  mm_blDuty = 0;
-  mm_setBacklight(true);
 
+  // TFT_eSPI's own init() does `pinMode(TFT_BL, OUTPUT); digitalWrite(TFT_BL, ...)`
+  // internally (see TFT_eSPI.cpp, guarded by `#if defined(TFT_BL) && defined(TFT_BACKLIGHT_ON)`)
+  // which would silently detach our LEDC/PWM binding on that pin if we set
+  // it up first. So: tft.init() FIRST, then claim the backlight pin for PWM.
   mm_tft.init();
   mm_tft.setRotation(0);
   mm_tft.setSwapBytes(true);
   mm_tft.fillScreen(TFT_BLACK);
+
+  ledcSetup(MM_BL_CHANNEL, MM_BL_FREQ, MM_BL_RES);
+  ledcAttachPin(TFT_BL, MM_BL_CHANNEL);
+  mm_blDuty = 0;
+  mm_setBacklight(true);
 
   mm_bg.setColorDepth(16);
   mm_bg.createSprite(240, 240);
@@ -196,6 +201,41 @@ void minerMaker154_ClockScreen(unsigned long mElapsed) {
   mm_statCell(4,   150, 232, 40, "BTC PRICE", data.btcPrice);
   mm_statCell(4,   194, 114, 40, "HASHRATE (KH/s)", data.currentHashRate);
   mm_statCell(122, 194, 114, 40, "SHARES", data.completedShares);
+
+  mm_bg.pushSprite(0, 0);
+}
+
+void minerMaker154_WifiInfoScreen(unsigned long mElapsed) {
+  clock_data data = getClockData(mElapsed); // only used for the header clock
+
+  mm_bg.fillSprite(TFT_BLACK);
+  mm_header("WI-FI / WEB", data.currentTime);
+
+  bool connected = (WiFi.status() == WL_CONNECTED);
+  String ssid = connected ? WiFi.SSID() : "(not connected)";
+  String ip = connected ? WiFi.localIP().toString() : "-";
+  String rssi = connected ? (String(WiFi.RSSI()) + " dBm") : "-";
+
+  mm_statCell(4,   38, 232, 40, "NETWORK (SSID)", ssid);
+  mm_statCell(4,   82, 114, 40, "IP ADDRESS", ip);
+  mm_statCell(122, 82, 114, 40, "SIGNAL", rssi);
+
+  mm_bg.fillRect(4, 128, 232, 100, MM_BLUE);
+  mm_bg.setFreeFont(&FreeSansBold9pt7b);
+  mm_bg.setTextColor(TFT_WHITE, MM_BLUE);
+  mm_bg.setTextDatum(TL_DATUM);
+  mm_bg.drawString("SETTINGS PAGE", 10, 132);
+
+  mm_bg.setFreeFont(&FreeSans9pt7b);
+  mm_bg.setTextColor(MM_YELLOW, MM_BLUE);
+  mm_bg.drawString("http://" MM_WEB_HOST ":" MM_WEB_PORT_S "/", 10, 154);
+  mm_bg.setTextColor(TFT_WHITE, MM_BLUE);
+  String ipLine = connected ? (String("or http://") + ip + ":" MM_WEB_PORT_S "/") : String("(connect to Wi-Fi first)");
+  mm_bg.drawString(ipLine, 10, 172);
+
+  mm_bg.setTextColor(TFT_WHITE, MM_BLUE);
+  mm_bg.drawString(String("user: ") + MM_WEB_USER, 10, 196);
+  mm_bg.drawString(String("pass: ") + MM_WEB_PASS, 10, 214);
 
   mm_bg.pushSprite(0, 0);
 }
@@ -335,6 +375,7 @@ CyclicScreenFunction minerMaker154CyclicScreens[] = {
     minerMaker154_MinerScreen,
     minerMaker154_GlobalHashScreen,
     minerMaker154_ClockScreen,
+    minerMaker154_WifiInfoScreen,
 };
 
 DisplayDriver minerMaker154DisplayDriver = {

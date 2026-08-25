@@ -112,12 +112,14 @@ Beyond the base mining/clock screens, the `MinerMaker154` display driver adds:
   (`TFT_eSprite`) and is blitted to the panel in one shot, instead of
   calling `fillScreen()` directly on the panel every second — the visible
   black flash on every data refresh is gone.
-- **Two extra screens**, cycled with a single press same as before: a
+- **Three extra screens**, cycled with a single press same as before: a
   **Network** screen (block height, global hashrate, difficulty, halving
-  progress, network fee) alongside the existing Mining and Clock screens.
-  Data comes from `getCoinData()` in `monitor.cpp`; this board doesn't
-  define `NERDMINER_T_HMI`, so only the single `halfHourFee` field is
-  available (not the fastest/economy/minimum fee tiers some other boards show).
+  progress, network fee) and a **Wi-Fi/Web** screen (network SSID, IP
+  address, signal strength, and the settings-page URL/credentials),
+  alongside the existing Mining and Clock screens. Network data comes from
+  `getCoinData()` in `monitor.cpp`; this board doesn't define
+  `NERDMINER_T_HMI`, so only the single `halfHourFee` field is available
+  (not the fastest/economy/minimum fee tiers some other boards show).
 - **QR code on the setup screen:** scan it with a phone camera to join the
   device's own `NerdMinerAP` Wi-Fi directly, instead of typing the SSID/password.
 - **True backlight-off:** the existing "several quick presses" gesture now
@@ -168,12 +170,23 @@ been **flashed to and run on a real physical unit** (mine), not just
 compiled:
 
 - The base mining firmware ran 12h+ continuously before the UI update.
-- The UI update (restyled screens, Network screen, QR code, true
+- The UI update (restyled screens, Network/Wi-Fi-Web screens, QR code, true
   backlight-off, auto-wake, settings web page) was flashed on top using
   `scripts/safe_reflash.sh` (app-partition-only, no erase) and confirmed
   booting and mining normally afterward, with the pre-existing wallet/pool/
   Wi-Fi settings and the mining stat counters (accumulated over the prior
   12h) intact and unaffected by the update.
+- The 3+-click backlight toggle was confirmed firing correctly (via serial
+  log) but had **no visible effect** on two flashed revisions in a row -
+  root cause found and fixed: `TFT_eSPI`'s own `init()` does
+  `pinMode(TFT_BL, OUTPUT); digitalWrite(TFT_BL, ...)` internally
+  (`TFT_eSPI.cpp`, guarded by `#if defined(TFT_BL) && defined(TFT_BACKLIGHT_ON)`),
+  which silently detaches any LEDC/PWM binding made on that pin *before*
+  calling `tft.init()`. The fix was reordering `minerMaker154_Init()` to
+  claim the pin for PWM *after* `tft.init()`, not before. This revision
+  has the fix but hasn't yet been re-confirmed on hardware to actually dim
+  the backlight (the click-detection and screen-rendering parts of this
+  same round were already hardware-confirmed working, per above).
 - Still not independently confirmed on hardware: the exact on-screen
   layout/spacing of the new screens, whether the setup-screen QR code
   scans cleanly on a real panel (that path only runs during initial Wi-Fi
@@ -289,7 +302,7 @@ see "Custom UI & features" above) without repeating this whole portal flow.
 
 | Action | Result |
 |---|---|
-| Single press | Toggle screen (Mining → Network → Clock → ...) |
+| Single press | Toggle screen (Mining → Network → Clock → Wi-Fi/Web → ...) |
 | Double press | Rotate screen orientation 90° |
 | Several quick presses (3+) | Toggle backlight fully on/off |
 | Hold 5+ sec | **Full reset** of settings (Wi-Fi + wallet + timezone) — requires going through the whole `NerdMinerAP` portal again |

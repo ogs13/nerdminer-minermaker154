@@ -163,6 +163,14 @@ documented above.
   is what `platform = espressif32@6.6.0` pins (arduino-esp32 core ~2.0.14);
   don't switch to the pin-based `ledcAttach(pin,...)` API from core 3.x
   without also bumping the pinned platform version.
+  **Ordering matters and bit us once**: `ledcSetup`/`ledcAttachPin` for
+  `TFT_BL` must happen *after* `mm_tft.init()`, never before — `TFT_eSPI`'s
+  own `init()` does `pinMode(TFT_BL, OUTPUT); digitalWrite(TFT_BL, ...)`
+  internally whenever `TFT_BL`/`TFT_BACKLIGHT_ON` are defined (see
+  `TFT_eSPI.cpp`), which silently detaches any earlier LEDC binding on that
+  pin. Confirmed on hardware: with the wrong order, the multi-click handler
+  fires correctly (visible in serial log) but the backlight never visibly
+  dims — `ledcWrite()` calls no longer reach the pin.
 - **Wi-Fi signal bars** in the header come from `WiFi.RSSI()` (`mm_wifiBars()`),
   not just `WiFi.status()`.
 - `Setup999_MinerMaker154.h` is a `TFT_eSPI` `User_Setup` (ID 999) — pins,
