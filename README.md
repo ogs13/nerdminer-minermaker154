@@ -1,164 +1,170 @@
-# ESP32 Bitcoin Miner ("MinerMaker") — документація проєкту
+# ESP32 Bitcoin Miner ("MinerMaker") — project documentation
 
-Подарований пристрій-соло-майнер на базі ESP32-S3 з екраном, куплений на
-**AliExpress** під брендом **"MinerMaker"**. Прошивка на ньому злетіла
-(нескінченний цикл перезавантажень), тому довелось діагностувати,
-переідентифікувати плату й зібрати кастомну прошивку з нуля.
+A gifted ESP32-S3 solo-mining device with a screen, bought on **AliExpress**
+under the **"MinerMaker"** brand. Its firmware got corrupted (endless
+reboot loop), so it had to be diagnosed, the exact board re-identified,
+and a custom firmware built from scratch.
 
-## Навіщо цей репозиторій і чим він відрізняється від того, що вже є в мережі
+## Why this repository, and how it differs from what's already out there
 
-Якщо ти шукаєш вирішення тієї самої проблеми — у тебе плата
-**"ESP32S3 1.54 TFT LCD V1.0"** виробника **ZJYUNJIE**, куплена на
-**AliExpress** під брендом **"MinerMaker"** (ESP32-S3, дисплей ST7789 1.54"
-240×240), і при цьому:
+If you're searching for a fix for the same problem — you have a
+**"ESP32S3 1.54 TFT LCD V1.0"** board made by **ZJYUNJIE**, bought on
+**AliExpress** under the **"MinerMaker"** brand (ESP32-S3, ST7789 1.54"
+240×240 display) — and:
 
-- пристрій циклічно перезавантажується кожні 2-3 сек
-  (у логах — `rst:0x7 TG0WDT_SYS_RST`), або
-- екран лишається **чорним із підсвіткою** після заливки офіційної/дефолтної
-  прошивки NerdMiner_v2 (стандартні білди розраховані на інші піни й інший
-  тип інтерфейсу — паралельний 8-біт замість SPI цієї плати),
+- the device keeps rebooting every 2-3 seconds
+  (logs show `rst:0x7 TG0WDT_SYS_RST`), or
+- the screen stays **black with the backlight on** after flashing the
+  official/default NerdMiner_v2 firmware (the stock builds target
+  different pins and a different interface type — parallel 8-bit instead
+  of this board's SPI),
 
-— то на момент публікації цього репозиторію продавець **ZJYUNJIE/"MinerMaker"**
-ніде публічно не викладав ні оригінальну прошивку, ні вихідний код, ні навіть
-точну модель плати (тільки фото товару й таблицю пінів у мануалі). Ця плата
-також відсутня в офіційному списку "Supported Boards" проєкту NerdMiner_v2.
-Тобто пошук на GitHub/форумах по "MinerMaker ESP32", "ESP32S3 1.54 TFT LCD
-V1.0" чи "ZJYUNJIE nerdminer" на момент написання нічого готового не дає.
+— then as of this repository's publication, the seller **ZJYUNJIE/"MinerMaker"**
+has not published the original firmware, source code, or even the exact
+board model anywhere publicly (only a product photo and a pin table in the
+manual). This board is also missing from the official "Supported Boards"
+list of the NerdMiner_v2 project. In other words, searching GitHub/forums
+for "MinerMaker ESP32", "ESP32S3 1.54 TFT LCD V1.0", or "ZJYUNJIE nerdminer"
+turns up nothing ready-made at the time of writing.
 
-Цей репозиторій закриває саме цю прогалину:
+This repository fills exactly that gap:
 
-- точна розпіновка дисплея (звірена з файлом продавця, не здогадка);
-- готовий до заливки бінарник (`firmware/MinerMaker154_factory.bin`) —
-  можна прошити відразу, без збірки з нуля;
-- повний набір файлів і покрокова інструкція, щоб самостійно зібрати
-  підтримку цієї плати (`MinerMaker154`) поверх чистого NerdMiner_v2, якщо
-  потрібно щось змінити.
+- the exact display pinout (verified against the seller's file, not guessed);
+- a ready-to-flash binary (`firmware/MinerMaker154_factory.bin`) — flash it
+  directly, no build required;
+- the complete set of files and step-by-step instructions to build support
+  for this board (`MinerMaker154`) on top of a clean NerdMiner_v2 checkout,
+  in case you need to change anything.
 
-## Апаратне забезпечення
+## Hardware
 
-- **Чіп:** ESP32-S3-WROOM-1, модуль **N8R8** (8MB Flash, 8MB PSRAM), ревізія v0.2
-- **Плата:** генерик-плата "**ESP32S3 1.54 TFT LCD V1.0**", виробник **ZJYUNJIE**
-  (продається під брендом **"MinerMaker"** на AliExpress — форк
-  [NerdMiner_v2](https://github.com/BitMaker-hub/NerdMiner_v2) з підміненим
-  логотипом; оригінальні прошивка/джерела продавця публічно не викладені)
-- **Дисплей:** ST7789, SPI, 240×240, 1.54"
-- **USB:** нативний USB-Serial/JTAG (порт `/dev/ttyACM0` на Linux), не окремий
-  USB-UART міст
+- **Chip:** ESP32-S3-WROOM-1, module **N8R8** (8MB Flash, 8MB PSRAM), revision v0.2
+- **Board:** generic "**ESP32S3 1.54 TFT LCD V1.0**" board, made by **ZJYUNJIE**
+  (sold under the **"MinerMaker"** brand on AliExpress — a
+  [NerdMiner_v2](https://github.com/BitMaker-hub/NerdMiner_v2) clone with a
+  swapped logo; the seller's original firmware/sources were never published)
+- **Display:** ST7789, SPI, 240×240, 1.54"
+- **USB:** native USB-Serial/JTAG (`/dev/ttyACM0` port on Linux), not a
+  separate USB-UART bridge
 
-### Розпіновка дисплея (з `docs/interface.txt`, від продавця)
+### Display pinout (from `docs/interface.txt`, provided by the seller)
 
-| Сигнал | GPIO |
+| Signal | GPIO |
 |---|---|
 | DC | 42 |
 | CS | 41 |
 | SCK/CLK | 40 |
 | SDA/MOSI | 39 |
 | RESET | 38 |
-| LCD_BL (підсвітка) | 21 |
-| Кнопка | 0 |
+| LCD_BL (backlight) | 21 |
+| Button | 0 |
 
-## Що було не так і як виправлено
+## What was wrong and how it was fixed
 
-1. **Симптом:** пристрій циклічно перезавантажувався кожні 2-3 сек
-   (`rst:0x7 TG0WDT_SYS_RST` — скид системним watchdog'ом) — прошивка
-   зависала одразу після старту через пошкоджений/незавершений запис флеша.
-2. **Права доступу:** користувача `ogs` додано в групу `uucp`
-   (`sudo usermod -aG uucp ogs`) для доступу до `/dev/ttyACM0`.
-3. **Стерто флеш і залито офіційну прошивку** NerdMiner_v2 (спершу під
-   LILYGO T-Display S3, потім дефолтний білд) — цикл зупинився, але екран
-   лишався чорним із підсвіткою: обидва білди розраховані на **інші піни й
-   інший тип інтерфейсу** (паралельний 8-біт замість SPI цієї плати).
-4. **Ідентифіковано точну плату** за фото плати (продавець "MinerMaker" на
-   AliExpress) і за файлом `interface.txt` з точною розпіновкою.
-5. **Зібрано кастомну прошивку** — додано нову плату/env у сам проєкт
-   NerdMiner_v2 (`MinerMaker154`) із правильними SPI-пінами й простим
-   текстовим драйвером екрана (без оригінального фірмового брендування
-   "MINER MAKER", яке ніде не публікується — дані ті самі: хешрейт, valid
-   blocks, shares, best difficulty, uptime).
-6. Прошито, перевірено — **екран показує, майнінг працює.**
+1. **Symptom:** the device kept rebooting every 2-3 seconds
+   (`rst:0x7 TG0WDT_SYS_RST` — reset by the system watchdog) — the firmware
+   hung right after boot due to a corrupted/incomplete flash write.
+2. **Permissions:** added user `ogs` to the `uucp` group
+   (`sudo usermod -aG uucp ogs`) for access to `/dev/ttyACM0`.
+3. **Erased the flash and installed the official NerdMiner_v2 firmware**
+   (first for LILYGO T-Display S3, then the default build) — the reboot
+   loop stopped, but the screen stayed black with the backlight on: both
+   builds target **different pins and a different interface type**
+   (parallel 8-bit instead of this board's SPI).
+4. **Identified the exact board** from a photo of the board (seller
+   "MinerMaker" on AliExpress) and from the `interface.txt` file with the
+   exact pinout.
+5. **Built a custom firmware** — added a new board/env to the NerdMiner_v2
+   project itself (`MinerMaker154`) with the correct SPI pins and a simple
+   text-based screen driver (without replicating the original vendor's
+   "MINER MAKER" branding, which was never published — the underlying data
+   is the same: hashrate, valid blocks, shares, best difficulty, uptime).
+6. Flashed and verified — **the screen works, mining runs.**
 
-### Друга проблема, знайдена окремо: 0 хешрейт при першому налаштуванні
+### A second, separately discovered problem: 0 hashrate on first setup
 
-Користувач спочатку вписав у поле BTC-адреси **`zpub...`** — це розширений
-публічний ключ (xpub) усього гаманця, а не адреса отримання. Пул
-(`public-pool.io:3333`) такий формат мовчки відхиляє, тому Wi-Fi і курс BTC
-працювали, а хешрейт лишався 0. Виправлено — вписана звичайна SegWit-адреса
-отримання (`bc1q...`) з BlueWallet (кнопка "Receive"), після чого майнінг
-запрацював.
+The user initially entered a **`zpub...`** in the BTC address field — this
+is an extended public key (xpub) for the whole wallet, not a receiving
+address. The pool (`public-pool.io:3333`) silently rejects this format, so
+Wi-Fi and the BTC price still worked, but hashrate stayed at 0. Fixed by
+entering a regular SegWit receiving address (`bc1q...`) from BlueWallet
+(the "Receive" button), after which mining started working.
 
-⚠️ **xpub/ypub/zpub — не адреса й не приватний ключ**, але розкриває всю
-історію транзакцій/баланс гаманця. Не варто вписувати його нікуди й ділитись
-публічно.
+⚠️ **An xpub/ypub/zpub is neither an address nor a private key**, but it
+exposes the wallet's entire transaction history/balance. Don't enter it
+anywhere or share it publicly.
 
-## Структура цієї директорії
+## Directory structure
 
 ```
 esp32_miner/
-├── README.md                      — цей файл
-├── LICENSE                        — MIT (успадкована від NerdMiner_v2)
+├── README.md                      — this file
+├── LICENSE                        — MIT (inherited from NerdMiner_v2)
 ├── docs/
-│   ├── interface.txt              — розпіновка дисплея від продавця
-│   ├── product_parametr.avif      — характеристики товару
-│   └── user_maual.pdf             — інструкція користувача від продавця
+│   ├── interface.txt              — display pinout from the seller
+│   ├── product_parametr.avif      — product specs
+│   └── user_maual.pdf             — seller's user manual
 └── firmware/
-    ├── MinerMaker154_factory.bin  — готовий до заливки образ (bootloader+partitions+app, офсет 0x0)
-    ├── MinerMaker154_firmware.bin — тільки застосунок (для оновлення, офсет 0x10000)
-    └── nerdminer-src-custom-files/— кастомні файли, додані в NerdMiner_v2 (див. нижче)
+    ├── MinerMaker154_factory.bin  — ready-to-flash image (bootloader+partitions+app, offset 0x0)
+    ├── MinerMaker154_firmware.bin — app only (for updates, offset 0x10000)
+    └── nerdminer-src-custom-files/— custom files added to NerdMiner_v2 (see below)
 ```
 
-## Як перепрошити наново (якщо знадобиться)
+## How to reflash (if needed)
 
-Потрібен `esptool` (`pip install esptool`) і права на `/dev/ttyACM0`
-(група `uucp`).
+Requires `esptool` (`pip install esptool`) and access to `/dev/ttyACM0`
+(the `uucp` group).
 
 ```bash
-# повне стирання флеша
+# full flash erase
 esptool --port /dev/ttyACM0 erase-flash
 
-# заливка готового образу одним файлом
+# flash the combined image in one shot
 esptool --port /dev/ttyACM0 --baud 460800 write-flash 0x0 firmware/MinerMaker154_factory.bin
 ```
 
-Після заливки: підключитися Wi-Fi до точки доступу **`NerdMinerAP`**,
-відкрити в браузері **`192.168.4.1`**, вибрати домашню мережу, ввести пароль
-і **власну BTC-адресу отримання** (не xpub!).
+After flashing: connect over Wi-Fi to the **`NerdMinerAP`** access point,
+open **`192.168.4.1`** in a browser, select your home network, enter its
+password, and enter **your own BTC receiving address** (not an xpub!).
 
-### Як перезібрати з джерела (якщо треба щось змінити в прошивці)
+### How to rebuild from source (if you need to change something in the firmware)
 
-1. Клонувати `git clone https://github.com/BitMaker-hub/NerdMiner_v2.git`
-2. Накласти файли з `firmware/nerdminer-src-custom-files/`:
-   - `platformio.ini` → корінь репо (додає `[env:MinerMaker154]`; або
-     вручну перенести секцію `[env:MinerMaker154]` в актуальний файл проєкту)
+1. Clone `git clone https://github.com/BitMaker-hub/NerdMiner_v2.git`
+2. Overlay the files from `firmware/nerdminer-src-custom-files/`:
+   - `platformio.ini` → repo root (adds `[env:MinerMaker154]`; or manually
+     merge just the `[env:MinerMaker154]` section into the current file)
    - `Setup999_MinerMaker154.h` → `lib/TFT_eSPI/User_Setups/`
    - `minerMaker154.h` → `src/drivers/devices/`
    - `minerMaker154DisplayDriver.cpp` → `src/drivers/displays/`
-   - Додати в `src/drivers/devices/device.h`:
+   - Add to `src/drivers/devices/device.h`:
      `#elif defined(MINERMAKER154) #include "minerMaker154.h"`
-   - Додати в `src/drivers/displays/displayDriver.h`:
+   - Add to `src/drivers/displays/displayDriver.h`:
      `extern DisplayDriver minerMaker154DisplayDriver;`
-   - Додати в `src/drivers/displays/display.cpp`:
+   - Add to `src/drivers/displays/display.cpp`:
      `#ifdef MINERMAKER_DISPLAY` → `currentDisplayDriver = &minerMaker154DisplayDriver;`
-   - Додати в `lib/TFT_eSPI/User_Setup_Select.h`:
+   - Add to `lib/TFT_eSPI/User_Setup_Select.h`:
      `#ifdef MINERMAKER154` → `#include <User_Setups/Setup999_MinerMaker154.h>`
-3. `pio run -e MinerMaker154` (PlatformIO) → результат у `firmware/dev/`
+3. `pio run -e MinerMaker154` (PlatformIO) → output in `firmware/dev/`
 
-## Кнопка (GPIO0)
+## Button (GPIO0)
 
-| Дія | Результат |
+| Action | Result |
 |---|---|
-| Одне натискання | Перемкнути екран (майнінг ↔ годинник) |
-| Подвійне натискання | Повернути орієнтацію екрана |
-| Кілька швидких натискань | Увімкнути/вимкнути підсвітку |
-| Утримання 5+ сек | **Повний скид** налаштувань (Wi-Fi + гаманець + часовий пояс) — після цього треба пройти весь портал `NerdMinerAP` заново |
+| Single press | Toggle screen (mining ↔ clock) |
+| Double press | Rotate screen orientation |
+| Several quick presses | Toggle backlight on/off |
+| Hold 5+ sec | **Full reset** of settings (Wi-Fi + wallet + timezone) — requires going through the whole `NerdMinerAP` portal again |
 
-Налаштування зберігаються в SPIFFS (флеш-пам'ять), тому просте
-вимкнення/увімкнення живлення їх **не** скидає.
+Settings are stored in SPIFFS (flash memory), so simply power-cycling the
+device does **not** reset them.
 
-## Можливі наступні кроки (не зроблено, за бажанням)
+## Possible next steps (not done, optional)
 
-- Додати екрани "Global hash" (глобальний хешрейт мережі, складність,
-  halving countdown) і "Fees" (комісії мережі, висота блоку) — дані вже
-  доступні в прошивці (`getCoinData()` / `getMiningFeesData()` в `monitor.cpp`),
-  бракує лише коду відображення в `minerMaker154DisplayDriver.cpp`.
-- Додати окрему веб-сторінку налаштувань (доступну по Wi-Fi без повного
-  скиду), щоб міняти таймзону/адресу без повторного вводу пароля Wi-Fi.
+- Add "Global hash" (network-wide hashrate, difficulty, halving countdown)
+  and "Fees" (network fees, block height) screens — the data is already
+  available in the firmware (`getCoinData()` / `getMiningFeesData()` in
+  `monitor.cpp`), only the display code in
+  `minerMaker154DisplayDriver.cpp` is missing.
+- Add a separate settings web page (reachable over Wi-Fi without a full
+  reset) to change the timezone/address without re-entering the Wi-Fi
+  password.

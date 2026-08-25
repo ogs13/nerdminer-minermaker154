@@ -13,7 +13,7 @@ the actual PlatformIO project lives externally (NerdMiner_v2, cloned
 separately); this repo holds only the *overlay files* needed to add a new
 board environment to it, plus prebuilt binaries and hardware docs.
 
-`README.md` (Ukrainian) is the primary, authoritative document — it contains
+`README.md` is the primary, authoritative document — it contains
 the full diagnosis narrative, pinout, flashing instructions, and a
 step-by-step guide for reapplying the custom files onto a fresh clone of
 NerdMiner_v2. Read it before making changes; keep it in sync with any change
