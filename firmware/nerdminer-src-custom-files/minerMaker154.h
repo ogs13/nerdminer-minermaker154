@@ -1,0 +1,8 @@
+#ifndef _MINERMAKER154_H
+#define _MINERMAKER154_H
+
+#define PIN_BUTTON_1 0
+
+#define MINERMAKER_DISPLAY
+
+#endif
