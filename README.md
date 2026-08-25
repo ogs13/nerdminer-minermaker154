@@ -153,6 +153,8 @@ esp32_miner/
 │   ├── interface.txt              — display pinout from the seller
 │   ├── product_parametr.avif      — product specs
 │   └── user_maual.pdf             — seller's user manual
+├── scripts/
+│   └── safe_reflash.sh            — update the firmware without erasing Wi-Fi/wallet/stats
 └── firmware/
     ├── MinerMaker154_factory.bin  — ready-to-flash image (bootloader+partitions+app, offset 0x0)
     ├── MinerMaker154_firmware.bin — app only (for updates, offset 0x10000)
@@ -191,6 +193,32 @@ that feedback is exactly what turns "works on my unit" / "compiles" into
 "confirmed working for this board."
 
 ## How to reflash (if needed)
+
+### Updating without losing your Wi-Fi/wallet settings or mining stats
+
+To install a newer build of this firmware on a device that's already set
+up, use `scripts/safe_reflash.sh` instead of the full erase below — it
+writes **only** the app partition (`MinerMaker154_firmware.bin` at
+`0x10000`), never touches the bootloader/partition table, and never runs
+`erase-flash` — so your Wi-Fi credentials, wallet/pool/timezone settings,
+and saved mining stats (all in other flash partitions) are left alone. It
+also takes a full flash backup first by default, so there's always a way
+back if something goes wrong:
+
+```bash
+./scripts/safe_reflash.sh              # auto-detects the port, asks before writing
+```
+
+Run `./scripts/safe_reflash.sh --help` for options (explicit port,
+skipping the backup, non-interactive mode). Requires `esptool` (installed
+automatically via `uv`/`pip` if missing) and access to the device's serial
+port (see below).
+
+### First-time flash / full reset
+
+For a brand new device (or to intentionally wipe everything and start the
+setup portal from scratch), erase the whole flash first. **This deletes
+Wi-Fi/wallet settings and mining stats too.**
 
 Requires `esptool` (`pip install esptool`) and a serial port to the device:
 

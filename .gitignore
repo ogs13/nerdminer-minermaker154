@@ -1,3 +1,7 @@
 # Excluded from publication
 photos/
 xxx.wbapp
+
+# Full-flash backups made by scripts/safe_reflash.sh - contain this
+# device's actual Wi-Fi/wallet settings, never publish these
+backups/
