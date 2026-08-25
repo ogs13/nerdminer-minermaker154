@@ -279,6 +279,10 @@ see "Custom UI & features" above) without repeating this whole portal flow.
      `#ifdef MINERMAKER_DISPLAY` → `currentDisplayDriver = &minerMaker154DisplayDriver;`
    - Add to `lib/TFT_eSPI/User_Setup_Select.h`:
      `#ifdef MINERMAKER154` → `#include <User_Setups/Setup999_MinerMaker154.h>`
+   - Add to `src/NerdMinerV2.ino.cpp`, right after `button1.setPressMs(5*SECOND_MS);`
+     in the one-button `setup()` block:
+     `#ifdef MINERMAKER154 button1.setClickMs(700); #endif`
+     (widens the multi-click window - see "Button (GPIO0)" below)
 3. `pio run -e MinerMaker154` (PlatformIO) → output in `firmware/dev/`
 
 ## Button (GPIO0)
@@ -289,6 +293,13 @@ see "Custom UI & features" above) without repeating this whole portal flow.
 | Double press | Rotate screen orientation 90° |
 | Several quick presses (3+) | Toggle backlight fully on/off |
 | Hold 5+ sec | **Full reset** of settings (Wi-Fi + wallet + timezone) — requires going through the whole `NerdMinerAP` portal again |
+
+3+ clicks only register if every gap between clicks is under the click
+window (`button1.setClickMs()` in `NerdMinerV2.ino.cpp`, upstream default
+400ms). On this board that's widened to **700ms** since 400ms proved too
+tight to land reliably by hand — the trade-off is a single click also
+takes up to 700ms (was 400ms) to register, since the button can't tell
+it's "just one click" until that window passes without a follow-up press.
 
 While the backlight is off, the screen automatically wakes itself up for
 1 minute every 15 minutes to show the time and mining status, then turns

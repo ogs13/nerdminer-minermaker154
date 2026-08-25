@@ -211,3 +211,13 @@ This mapping is wired in upstream `NerdMinerV2.ino.cpp`'s `setup()`
 only implements what each of those calls into
 (`alternateScreenState`/`alternateScreenRotation`/the cyclic-screen array).
 Settings persist in SPIFFS across power cycles.
+
+One line in that upstream `setup()` block *is* board-specific for us:
+`#ifdef MINERMAKER154 button1.setClickMs(700); #endif` right after
+`button1.setPressMs(...)`. Confirmed on real hardware: OneButton's default
+400ms multi-click window (`_click_ms` in `OneButton.cpp`, finalizes a click
+sequence as click/doubleClick/multiClick once no new press arrives within
+that window since the last release) is too tight to reliably land 3+ rapid
+clicks by hand, so this widens it to 700ms for this board only. Trade-off:
+a lone single-click also now takes up to 700ms (not 400ms) to fire, since
+the FSM can't yet know it won't be followed by another click.
