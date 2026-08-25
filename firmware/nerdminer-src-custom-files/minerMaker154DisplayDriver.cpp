@@ -100,6 +100,19 @@ static void mm_header(const char *title, const String &time) {
 static void mm_clipBegin(int x, int y, int w, int h) { mm_bg.setViewport(x, y, w, h, false); }
 static void mm_clipEnd() { mm_bg.resetViewport(); }
 
+// True if `value` is safe to render in the DSEG7 7-segment-style font -
+// i.e. it's just digits and the handful of punctuation marks that font
+// actually has clean glyphs for. Anything with a letter (units like
+// "sat/vB", "T" for tera, ...) looks like garbled segments in DSEG7.
+static bool mm_isDigital(const String &value) {
+  for (size_t i = 0; i < value.length(); i++) {
+    char c = value[i];
+    bool ok = isDigit(c) || c == '.' || c == ',' || c == '%' || c == '-' || c == ' ' || c == ':';
+    if (!ok) return false;
+  }
+  return value.length() > 0;
+}
+
 // Draws `value` centered on (cx, topY) using the digital font, shrinking
 // the font size (down to a floor) if it doesn't fit within maxWidth or
 // maxHeight - values coming off the network (price, hashrate, block
@@ -133,16 +146,28 @@ static void mm_statCell(int x, int y, int w, int h, const char *label, const Str
   mm_bg.drawString(label, x + 6, y + 4);
 
   // Value in the same "digital display" 7-segment-style font as the hero
-  // numbers, like the reference vendor look - not just the big hashrate.
-  // This is a real GFXfont (unlike the DigitalNumbers/OpenFontRender path),
-  // so plain textWidth()/setFreeFont() sizing is reliable here.
+  // numbers, like the reference vendor look - but only for values that
+  // are actually just digits/./,/%/- : DSEG7 renders letters as garbled
+  // segment approximations (confirmed on hardware - "1 sat/vB" and
+  // "125.80T" were unreadable), so anything with a letter in it falls
+  // back to the normal bold sans font instead.
   mm_bg.setTextColor(TFT_WHITE, TFT_BLACK);
   mm_bg.setTextDatum(BL_DATUM);
-  mm_bg.setFreeFont(&DSEG7_Classic_Bold_17);
-  if (mm_bg.textWidth(value) > w - 12) {
-    mm_bg.setFreeFont(&DSEG7_Classic_Bold_12);
+  if (mm_isDigital(value)) {
+    mm_bg.setFreeFont(&DSEG7_Classic_Bold_17);
+    if (mm_bg.textWidth(value) > w - 12) {
+      mm_bg.setFreeFont(&DSEG7_Classic_Bold_12);
+    }
+  } else {
+    mm_bg.setFreeFont(&FreeSansBold9pt7b);
   }
   mm_bg.drawString(value, x + 6, y + h - 6);
+
+  // Leave the font state as callers everywhere else expect it (plain
+  // sans) - mm_statCell() is the only place that switches to DSEG7, and a
+  // caller drawing more text right after it (e.g. the Network screen's
+  // halving-bar label) has no reason to expect that to still be active.
+  mm_bg.setFreeFont(&FreeSans9pt7b);
   mm_clipEnd();
 }
 
@@ -262,11 +287,14 @@ void minerMaker154_ClockScreen(unsigned long mElapsed) {
   mm_bg.setTextColor(MM_YELLOW, TFT_BLACK);
   mm_bg.setTextDatum(MC_DATUM);
   mm_bg.setFreeFont(&DSEG7_Classic_Bold_32);
-  mm_bg.setTextSize(3);
-  if (mm_bg.textWidth(data.currentTime) > 228) {
-    mm_bg.setTextSize(2);
+  mm_bg.setTextSize(4);
+  if (mm_bg.textWidth(data.currentTime) > 232) {
+    mm_bg.setTextSize(3);
+    if (mm_bg.textWidth(data.currentTime) > 232) {
+      mm_bg.setTextSize(2);
+    }
   }
-  mm_bg.drawString(data.currentTime, 120, 140);
+  mm_bg.drawString(data.currentTime, 106, 126);
   mm_bg.setTextSize(1);
 
   mm_bg.setFreeFont(&FreeSans9pt7b);

@@ -235,6 +235,18 @@ compiled:
   `GFXfont` (a real GFXfont, sized via `setTextSize()`, measured with the
   ordinary and reliable `textWidth()`) — see "Custom UI & features" for
   the resulting full-screen Clock redesign.
+- Applying that same digital font to *every* stat-box value (to match the
+  reference look) broke any value containing a letter — a 7-segment font
+  only has clean glyphs for digits/punctuation, so "1 sat/vB" rendered as
+  garbled segments, and same for the Wi-Fi screen's SSID and "-53 dBm"
+  signal reading. Fixed by only using the digital font for values that are
+  actually just digits/`.`/`,`/`%`/`-` (`mm_isDigital()`), falling back to
+  the normal bold sans font for anything else. Found alongside a related
+  bug: `mm_statCell()` left the digital font selected as global state
+  afterward, so unrelated text drawn right after it on the same screen
+  (the Network screen's "Halving NN%" progress-bar label) silently
+  inherited it too — fixed by having `mm_statCell()` always restore the
+  normal font before returning.
 - Still not independently confirmed on hardware: the exact on-screen
   layout/spacing of the new screens, whether the setup-screen QR code
   scans cleanly on a real panel (that path only runs during initial Wi-Fi

@@ -219,6 +219,22 @@ documented above.
   OpenFontRender. This is also what `mm_statCell()`'s values and the
   Clock/Status screens' big time now use — don't reintroduce
   `mm_bigNumber()` for anything that renders a colon.
+- **DSEG7 only renders digits/punctuation cleanly** — confirmed on
+  hardware that letters come out as garbled segment approximations (e.g.
+  "1 sat/vB" or a Wi-Fi SSID/"-53 dBm"). `mm_statCell()` therefore checks
+  `mm_isDigital(value)` (digits and `. , % - space :` only) before picking
+  DSEG7 for the value, falling back to `FreeSansBold9pt7b` otherwise. Any
+  new digital-styled value must go through the same check, not assume
+  DSEG7 is always safe.
+- **`mm_statCell()` restores the font before returning** (`FreeSans9pt7b`)
+  — it's the only place that switches to DSEG7, and `setFreeFont()` is
+  global sprite state that persists across calls; a screen drawing more
+  text right after a `mm_statCell()` call (e.g. the Network screen's
+  halving-bar label) previously inherited whatever font the last
+  `mm_statCell()` call happened to leave selected. If you add a new helper
+  that changes `mm_bg`'s font/text size, leave it in a known state before
+  returning, the way this one now does — don't rely on the next caller
+  setting it explicitly.
 - **CSS gotcha**: don't reuse a `0xRRGGBB`-style RGB565 display color
   literal (e.g. `MM_YELLOW`/`0xFEA0`) as a CSS hex color string in
   `webSettings.cpp`'s HTML. A 4-hex-digit CSS color is `#RGBA` shorthand,
