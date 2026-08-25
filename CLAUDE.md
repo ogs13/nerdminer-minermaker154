@@ -81,6 +81,7 @@ Then, relative to that checkout's root:
 | `Setup999_MinerMaker154.h` | `lib/TFT_eSPI/User_Setups/` |
 | `minerMaker154.h` | `src/drivers/devices/` |
 | `minerMaker154DisplayDriver.cpp` | `src/drivers/displays/` |
+| `webSettings.h`, `webSettings.cpp` | `src/` (self-guarded with `#ifdef MINERMAKER154`, so harmless if left in place for other envs) |
 
 Plus three manual one-line additions to existing upstream files:
 
@@ -99,28 +100,66 @@ Output lands in that checkout's `firmware/dev/` (not in this repo — copy
 the resulting `.bin` files back into this repo's `firmware/` if updating
 the archived artifacts).
 
+**PlatformIO is not preinstalled in a fresh environment.** It can be added
+without sudo via `uv tool install platformio` (then `~/.local/bin/pio`) —
+this is the fastest path if you need to actually verify a firmware change
+compiles rather than just eyeballing it. The first build downloads the
+ESP32-S3 Xtensa toolchain (a few hundred MB); subsequent builds are fast
+(~15-30s). This has been done at least once and confirmed the
+`MinerMaker154` env builds clean end-to-end with the overlay applied as
+documented above.
+
 ### Custom-files architecture notes
 
 - `minerMaker154.h` is the device definition: it sets `PIN_BUTTON_1` and
   defines `MINERMAKER_DISPLAY`, which gates the display driver file.
-- `minerMaker154DisplayDriver.cpp` implements a plain, unbranded
-  text/box UI (deliberately not replicating the original vendor's "MINER
-  MAKER" branded firmware, which was never published) using `TFT_eSPI`
-  directly. It follows NerdMiner_v2's `DisplayDriver` struct contract:
-  init/toggle-screen/toggle-rotation/loading-screen/setup-screen/an array
-  of cyclic screen-draw functions/animate/LED callback. Mining and clock
-  data are pulled from upstream's `monitor.cpp` via `getMiningData()` /
-  `getClockData()` — this file only renders, it doesn't compute.
-  `getCoinData()` / `getMiningFeesData()` are already available from
-  upstream `monitor.cpp` but not yet wired into any screen here (see
-  README's "possible next steps").
+- `minerMaker154DisplayDriver.cpp` implements a themed (dark/yellow/blue,
+  digital-font hero numbers) but not vendor-branded UI — deliberately not
+  replicating the original vendor's "MINER MAKER" wordmark/logo, which was
+  never published — using `TFT_eSPI` + `OpenFontRender` (for the
+  `DigitalNumbers` font already bundled in upstream's `src/media/myFonts.h`).
+  It follows NerdMiner_v2's `DisplayDriver` struct contract: init/toggle-
+  screen/toggle-rotation/loading-screen/setup-screen/an array of cyclic
+  screen-draw functions/animate/LED callback. Mining, clock and coin data
+  are pulled from upstream's `monitor.cpp` via `getMiningData()` /
+  `getClockData()` / `getCoinData()` — this file only renders, it doesn't compute.
+  - **Rendering is sprite-based**: every screen draws into an off-screen
+    `TFT_eSprite` (`mm_bg`) and calls `pushSprite(0,0)` once at the end,
+    instead of drawing straight to the panel — this is what avoids the
+    visible black flash on every 1-second data refresh (`drawCurrentScreen()`
+    in upstream `mining.cpp`'s `runMonitor()` task calls the active cyclic
+    screen function every 1000ms). Follow this pattern for any new screen.
+  - **Backlight/auto-wake state** (`backlightOn`, `autoWaking`,
+    `lastOffMillis`, `autoWakeStart`) lives in file-static variables and is
+    driven from `minerMaker154_AnimateCurrentScreen()`, which upstream
+    calls roughly every 100ms (`DELAY` in `mining.cpp`) regardless of
+    mining/backlight state — this is also where `minerMaker154_WebSettingsLoop()`
+    gets serviced, since there's no other per-tick hook available without
+    editing upstream's `NerdMinerV2.ino.cpp`.
+  - The **setup screen's QR code** uses the `ricmoo/QRCode` library
+    (`lib_deps` in `platformio.ini`) to encode
+    `WIFI:T:WPA;S:NerdMinerAP;P:MineYourCoins;;` — `NerdMinerAP` /
+    `MineYourCoins` are NerdMiner_v2's own hardcoded AP defaults
+    (`src/drivers/storage/storage.h`: `DEFAULT_SSID`/`DEFAULT_WIFIPW`), not
+    board-specific, so this stays correct unless upstream changes those.
+- `webSettings.cpp`/`.h` add a small always-on `WebServer` on port 8080
+  (separate from WiFiManager's captive-portal server on 80, which is only
+  alive during initial setup) exposing a form for `BtcWallet`/`PoolAddress`/
+  `PoolPort`/`PoolPassword`/`Timezone` — the same fields the setup portal
+  collects. It reads/writes the global `Settings` (`TSettings`, defined in
+  `src/drivers/storage/storage.h`) and calls `nvMem.saveConfig(&Settings)`
+  (both declared `extern` from `wManager.cpp`, which owns them but doesn't
+  expose them via `wManager.h`) then `ESP.restart()`, mirroring how the
+  setup portal itself applies changes. Wi-Fi SSID/password are intentionally
+  *not* editable here — those still require the full portal/reset flow.
 - `Setup999_MinerMaker154.h` is a `TFT_eSPI` `User_Setup` (ID 999) — pins,
   `ST7789_DRIVER`, BGR order, inversion-on, SPI frequencies. This is
   TFT_eSPI's own config layer; the `[env:MinerMaker154]` build additionally
   ignores nothing special beyond upstream's usual `lib_ignore` list.
 - `platformio.ini`'s `[env:MinerMaker154]` mirrors the sibling `NerdminerV2`
   env (same board `esp32-s3-devkitc-1`, `qio_opi` PSRAM, native USB CDC)
-  but swaps in `-D MINERMAKER154=1` instead of `-D NERDMINERV2=1`.
+  but swaps in `-D MINERMAKER154=1` instead of `-D NERDMINERV2=1`, and adds
+  `ricmoo/QRCode` to `lib_deps`.
 
 ## Known gotcha: wallet address field
 
@@ -135,9 +174,14 @@ transaction history/balance and should never be shared.
 
 | Action | Result |
 |---|---|
-| Single press | Toggle screen (mining ↔ clock) |
+| Single press | Toggle screen (Mining → Network → Clock → ...) |
 | Double press | Rotate screen |
-| Several quick presses | Toggle backlight |
+| Several quick presses (3+) | Toggle backlight fully off/on |
 | Hold 5+ sec | Full settings reset (Wi-Fi + wallet + timezone) — forces the `NerdMinerAP` setup portal again |
 
+This mapping is wired in upstream `NerdMinerV2.ino.cpp`'s `setup()`
+(`OneButton` `attachClick`/`attachDoubleClick`/`attachMultiClick`/
+`attachLongPressStart`), not in our custom files — `minerMaker154DisplayDriver.cpp`
+only implements what each of those calls into
+(`alternateScreenState`/`alternateScreenRotation`/the cyclic-screen array).
 Settings persist in SPIFFS across power cycles.
