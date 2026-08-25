@@ -4,11 +4,17 @@
 
 #include <TFT_eSPI.h>
 #include <WiFi.h>
+#include <Preferences.h>
 #include "monitor.h"
 #include "OpenFontRender.h"
 #include "media/myFonts.h"   // DigitalNumbers font (bundled in NerdMiner_v2)
 #include "qrcode.h"
 #include "webSettings.h"
+
+// Own NVS namespace, separate from the project's own settings/stats
+// storage - just persists whether the backlight was on or off, so a power
+// cycle resumes in the same state instead of always waking up lit.
+static Preferences mmPrefs;
 
 TFT_eSPI mm_tft = TFT_eSPI();
 TFT_eSprite mm_bg = TFT_eSprite(&mm_tft); // off-screen frame buffer: draw here, blit once -> no flicker
@@ -123,7 +129,13 @@ void minerMaker154_Init(void) {
   ledcSetup(MM_BL_CHANNEL, MM_BL_FREQ, MM_BL_RES);
   ledcAttachPin(TFT_BL, MM_BL_CHANNEL);
   mm_blDuty = 0;
-  mm_setBacklight(true);
+
+  // Resume whatever backlight state was last explicitly set (survives
+  // power cycles), instead of always waking up lit.
+  mmPrefs.begin("mm154bl", false);
+  bool savedOn = mmPrefs.getBool("on", true);
+  mm_setBacklight(savedOn);
+  if (!savedOn) lastOffMillis = millis();
 
   mm_bg.setColorDepth(16);
   mm_bg.createSprite(240, 240);
@@ -142,6 +154,7 @@ void minerMaker154_Init(void) {
 void minerMaker154_AlternateScreenState(void) {
   Serial.println("MinerMaker154: toggling backlight");
   mm_setBacklight(!backlightOn);
+  mmPrefs.putBool("on", backlightOn); // persist across power cycles
   autoWaking = false;
   if (!backlightOn) {
     lastOffMillis = millis();

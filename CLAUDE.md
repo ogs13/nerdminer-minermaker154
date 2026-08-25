@@ -170,7 +170,21 @@ documented above.
   `TFT_eSPI.cpp`), which silently detaches any earlier LEDC binding on that
   pin. Confirmed on hardware: with the wrong order, the multi-click handler
   fires correctly (visible in serial log) but the backlight never visibly
-  dims — `ledcWrite()` calls no longer reach the pin.
+  dims — `ledcWrite()` calls no longer reach the pin. Fixed and confirmed
+  working (both directions of the fade) after reflashing.
+- **Backlight on/off state persists across power cycles** via a dedicated
+  `Preferences` (NVS) namespace, `"mm154bl"` — deliberately separate from
+  the project's own `TSettings`/`nvMemory` storage (avoids touching
+  `storage.h`/`nvMemory.cpp`, which are upstream-owned and shared by every
+  board). Written only from the manual toggle
+  (`minerMaker154_AlternateScreenState()`); the temporary auto-wake fades
+  intentionally don't touch it.
+- **CSS gotcha**: don't reuse a `0xRRGGBB`-style RGB565 display color
+  literal (e.g. `MM_YELLOW`/`0xFEA0`) as a CSS hex color string in
+  `webSettings.cpp`'s HTML. A 4-hex-digit CSS color is `#RGBA` shorthand,
+  not a truncated RGB565 value — `#FEA0` parsed as `#FFEEAA00`, i.e. fully
+  transparent, which is why the settings page's submit button was
+  invisible until this was caught. Use real 6-digit hex for web CSS.
 - **Wi-Fi signal bars** in the header come from `WiFi.RSSI()` (`mm_wifiBars()`),
   not just `WiFi.status()`.
 - `Setup999_MinerMaker154.h` is a `TFT_eSPI` `User_Setup` (ID 999) — pins,

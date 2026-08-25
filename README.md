@@ -142,6 +142,10 @@ Beyond the base mining/clock screens, the `MinerMaker154` display driver adds:
   your home LAN, not a real secret).
 - **Smooth backlight fade** instead of an instant on/off cut (PWM via the
   ESP32's LEDC peripheral), for both the manual toggle and the auto-wake.
+- **Backlight state survives power cycles** — if you turn the screen off
+  and then power-cycle the device, it comes back up with the screen still
+  off (instead of always waking up lit). Stored in its own NVS namespace,
+  separate from the wallet/pool settings.
 - **Wi-Fi signal bars** in the header (from `WiFi.RSSI()`) instead of a
   plain connected/not-connected dot.
 
@@ -176,17 +180,20 @@ compiled:
   booting and mining normally afterward, with the pre-existing wallet/pool/
   Wi-Fi settings and the mining stat counters (accumulated over the prior
   12h) intact and unaffected by the update.
-- The 3+-click backlight toggle was confirmed firing correctly (via serial
-  log) but had **no visible effect** on two flashed revisions in a row -
-  root cause found and fixed: `TFT_eSPI`'s own `init()` does
+- The 3+-click backlight toggle initially fired correctly (confirmed via
+  serial log) but had no visible effect - root cause found and fixed on
+  real hardware: `TFT_eSPI`'s own `init()` does
   `pinMode(TFT_BL, OUTPUT); digitalWrite(TFT_BL, ...)` internally
   (`TFT_eSPI.cpp`, guarded by `#if defined(TFT_BL) && defined(TFT_BACKLIGHT_ON)`),
   which silently detaches any LEDC/PWM binding made on that pin *before*
-  calling `tft.init()`. The fix was reordering `minerMaker154_Init()` to
-  claim the pin for PWM *after* `tft.init()`, not before. This revision
-  has the fix but hasn't yet been re-confirmed on hardware to actually dim
-  the backlight (the click-detection and screen-rendering parts of this
-  same round were already hardware-confirmed working, per above).
+  calling `tft.init()`. Fixed by reordering `minerMaker154_Init()` to claim
+  the pin for PWM *after* `tft.init()` - confirmed working (smooth fade,
+  both directions) after reflashing.
+- The settings web page's "Save & restart" button was invisible in a
+  browser - root cause: its CSS used `#FEA0` (the display code's RGB565
+  color literal for yellow) as if it were a 4-digit CSS hex color, which
+  browsers parse as `#FFEEAA00` - fully transparent alpha. Fixed to a
+  proper 6-digit hex.
 - Still not independently confirmed on hardware: the exact on-screen
   layout/spacing of the new screens, whether the setup-screen QR code
   scans cleanly on a real panel (that path only runs during initial Wi-Fi

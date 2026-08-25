@@ -42,7 +42,7 @@ static void mmHandleRoot() {
   html += "body{font-family:sans-serif;max-width:480px;margin:24px auto;padding:0 12px;background:#111;color:#eee}";
   html += "h1{font-size:1.2em}label{display:block;margin-top:14px;font-size:.9em;color:#aaa}";
   html += "input{width:100%;box-sizing:border-box;padding:8px;margin-top:4px;background:#222;color:#eee;border:1px solid #444;border-radius:4px}";
-  html += "button{margin-top:20px;padding:10px 18px;background:#FEA0;color:#111;border:0;border-radius:4px;font-weight:bold}";
+  html += "button{margin-top:20px;padding:10px 18px;background:#ffd700;color:#111;border:0;border-radius:4px;font-weight:bold;font-size:1em;cursor:pointer}";
   html += "</style></head><body>";
   html += "<h1>MinerMaker154 settings</h1>";
   html += "<p style='color:#aaa'>Changes are saved to flash and the device restarts to apply them.</p>";
