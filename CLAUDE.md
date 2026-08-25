@@ -192,12 +192,20 @@ documented above.
   add a new stat box or hero number without clipping it the same way,
   since upstream's data strings (price, hashrate, block height, ...) vary
   in length and nothing here previously guaranteed they'd fit.
-- **`mm_bigNumber()` auto-shrinks to fit**: it takes `maxFontSize` and
-  `maxWidth`, measures via `OpenFontRender::getTextWidth()`, and steps the
-  font size down (in 2px steps, floor 12px) until the string fits before
-  drawing — rather than a single hardcoded size that happens to fit
-  whatever value was on screen when it was tuned. Wrap its call site in
-  `mm_clipBegin`/`mm_clipEnd` too as a backstop.
+- **`mm_bigNumber()` auto-shrinks to fit, on BOTH axes**: it takes
+  `maxFontSize`, `maxWidth` AND `maxHeight`, measures via
+  `OpenFontRender::getTextWidth()`/`getTextHeight()`, and steps the font
+  size down (2px steps, floor 12px) until the string fits both — rather
+  than a single hardcoded size that happens to fit whatever value was on
+  screen when it was tuned.
+  **Do NOT wrap a `mm_bigNumber()` call in `mm_clipBegin`/`mm_clipEnd` and
+  assume that bounds it** — confirmed on hardware (two rounds of photos)
+  that `OpenFontRender` draws straight into the sprite buffer and ignores
+  `TFT_eSprite::setViewport()` clipping entirely; a clipped call still
+  overflowed its box exactly as if unclipped. `setViewport` clipping only
+  actually constrains plain `mm_bg.drawString()` calls (native TFT_eSPI
+  text) — that's what `mm_statCell()` and the decorative-box wraps rely
+  on, and why only measurement-based sizing works for the digital font.
 - **CSS gotcha**: don't reuse a `0xRRGGBB`-style RGB565 display color
   literal (e.g. `MM_YELLOW`/`0xFEA0`) as a CSS hex color string in
   `webSettings.cpp`'s HTML. A 4-hex-digit CSS color is `#RGBA` shorthand,

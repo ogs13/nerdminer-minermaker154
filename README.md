@@ -211,6 +211,17 @@ compiled:
   box. Fixed generally (every stat box now clips its own text; the big
   numbers auto-shrink to fit) rather than just re-tuning the specific
   strings seen in those photos - see "Custom UI & features".
+- A second round of photos caught a follow-up: the stat-box clipping fix
+  worked (labels/values now cut cleanly instead of overlapping a
+  neighbour), but the Clock screen's big digits *still* overlapped the BTC
+  price box below - because the "clip the container" fix doesn't apply to
+  them. The digital-font hero numbers (clock, hashrate, block height) are
+  drawn by `OpenFontRender` straight into the sprite buffer, which does
+  **not** respect `TFT_eSprite::setViewport()` clipping the way normal
+  `drawString()` calls do. Fixed by making `mm_bigNumber()` measure the
+  actual rendered height via `OpenFontRender::getTextHeight()` and shrink
+  the font until it truly fits, instead of relying on a clip that silently
+  didn't apply to it.
 - Still not independently confirmed on hardware: the exact on-screen
   layout/spacing of the new screens, whether the setup-screen QR code
   scans cleanly on a real panel (that path only runs during initial Wi-Fi

@@ -101,17 +101,24 @@ static void mm_clipBegin(int x, int y, int w, int h) { mm_bg.setViewport(x, y, w
 static void mm_clipEnd() { mm_bg.resetViewport(); }
 
 // Draws `value` centered on (cx, topY) using the digital font, shrinking
-// the font size (down to a floor) if it doesn't fit within maxWidth -
-// values coming off the network (price, hashrate, block height, ...) can
-// be a digit or two longer or shorter than whatever we last eyeballed.
-static void mm_bigNumber(const String &value, int cx, int topY, int maxFontSize, int maxWidth, uint16_t fg, uint16_t bg) {
+// the font size (down to a floor) if it doesn't fit within maxWidth or
+// maxHeight - values coming off the network (price, hashrate, block
+// height, ...) can be a digit or two longer/taller than whatever we last
+// eyeballed. NOTE: OpenFontRender draws straight into the sprite buffer
+// and does NOT respect TFT_eSprite::setViewport() clipping (confirmed on
+// hardware - a clipped mm_bigNumber still overflowed) - so this has to
+// actually fit the number via measurement, mm_clipBegin/End around a
+// mm_bigNumber call is not a real backstop the way it is for drawString().
+static void mm_bigNumber(const String &value, int cx, int topY, int maxFontSize, int maxWidth, int maxHeight, uint16_t fg, uint16_t bg) {
   int fontSize = maxFontSize;
   mm_render.setFontSize(fontSize);
   uint32_t w = mm_render.getTextWidth(value.c_str());
-  while (w > (uint32_t)maxWidth && fontSize > 12) {
+  uint32_t h = mm_render.getTextHeight(value.c_str());
+  while ((w > (uint32_t)maxWidth || h > (uint32_t)maxHeight) && fontSize > 12) {
     fontSize -= 2;
     mm_render.setFontSize(fontSize);
     w = mm_render.getTextWidth(value.c_str());
+    h = mm_render.getTextHeight(value.c_str());
   }
   mm_render.drawString(value.c_str(), cx - (int)w / 2, topY, fg, bg);
 }
@@ -204,13 +211,15 @@ void minerMaker154_MinerScreen(unsigned long mElapsed) {
   mm_bg.setTextColor(TFT_WHITE, MM_BLUE);
   mm_bg.setTextDatum(TC_DATUM);
   mm_bg.drawString("BLOCKS", 38, 44);
-  mm_bigNumber(data.valids, 38, 60, 18, 60, TFT_WHITE, MM_BLUE);
+  mm_bigNumber(data.valids, 38, 60, 18, 60, 22, TFT_WHITE, MM_BLUE);
 
-  mm_bigNumber(data.currentHashRate, 158, 42, 26, 132, TFT_WHITE, MM_BLUE);
+  // Hashrate number gets a fixed height budget (measured, not guessed) so
+  // "KH/s" below it always has clearance instead of overlapping.
+  mm_bigNumber(data.currentHashRate, 158, 42, 26, 132, 26, TFT_WHITE, MM_BLUE);
   mm_bg.setFreeFont(&FreeSans9pt7b);
   mm_bg.setTextColor(TFT_WHITE, MM_BLUE);
   mm_bg.setTextDatum(TR_DATUM);
-  mm_bg.drawString("KH/s", 230, 82);
+  mm_bg.drawString("KH/s", 230, 72);
   mm_clipEnd();
 
   // 2x2 stat grid
@@ -231,9 +240,10 @@ void minerMaker154_ClockScreen(unsigned long mElapsed) {
   mm_bg.fillSprite(TFT_BLACK);
   mm_header("CLOCK", data.currentTime);
 
-  mm_clipBegin(0, 36, 240, 74);
-  mm_bigNumber(data.currentTime, 120, 40, 60, 224, MM_YELLOW, TFT_BLACK);
-  mm_clipEnd();
+  // maxHeight=68 keeps the digits clear of the BTC PRICE box starting at
+  // y=114, regardless of this font's actual glyph height at a given size
+  // (measured via getTextHeight(), not assumed - see mm_bigNumber comment).
+  mm_bigNumber(data.currentTime, 120, 40, 60, 224, 68, MM_YELLOW, TFT_BLACK);
 
   mm_statCell(4,   114, 232, 36, "BTC PRICE", data.btcPrice);
   mm_statCell(4,   154, 114, 36, "HASHRATE", data.currentHashRate + " KH/s");
@@ -254,8 +264,10 @@ void minerMaker154_WifiInfoScreen(unsigned long mElapsed) {
   String rssi = connected ? (String(WiFi.RSSI()) + " dBm") : "-";
 
   mm_statCell(4,   38, 232, 40, "NETWORK (SSID)", ssid);
-  mm_statCell(4,   82, 114, 40, "IP ADDRESS", ip);
-  mm_statCell(122, 82, 114, 40, "SIGNAL", rssi);
+  // IP addresses ("192.168.31.73") run long - give that cell most of the
+  // width instead of splitting evenly, so it doesn't get clipped.
+  mm_statCell(4,   82, 150, 40, "IP ADDRESS", ip);
+  mm_statCell(158, 82, 78,  40, "SIGNAL", rssi);
 
   mm_bg.fillRect(4, 128, 232, 100, MM_BLUE);
   mm_clipBegin(4, 128, 232, 100);
@@ -289,14 +301,18 @@ void minerMaker154_GlobalHashScreen(unsigned long mElapsed) {
   mm_bg.setTextColor(MM_GREY, TFT_BLACK);
   mm_bg.setTextDatum(TC_DATUM);
   mm_bg.drawString("BLOCK HEIGHT", 120, 30);
-  mm_clipBegin(0, 42, 240, 30);
-  mm_bigNumber(data.blockHeight, 120, 44, 22, 224, TFT_WHITE, TFT_BLACK);
-  mm_clipEnd();
+  mm_bigNumber(data.blockHeight, 120, 44, 22, 224, 30, TFT_WHITE, TFT_BLACK);
 
-  mm_statCell(4,   96, 114, 54, "GLOBAL HASH", data.globalHashRate);
+  // remainingBlocks already comes as "<N> BLOCKS" (monitor.cpp) - too long
+  // for a 114px cell together with a label, so just show the number here.
+  String blocksLeftNum = data.remainingBlocks;
+  int spaceIdx = blocksLeftNum.indexOf(' ');
+  if (spaceIdx > 0) blocksLeftNum = blocksLeftNum.substring(0, spaceIdx);
+
+  mm_statCell(4,   96, 114, 54, "GLOBAL H/S", data.globalHashRate);
   mm_statCell(122, 96, 114, 54, "DIFFICULTY", data.netwrokDifficulty);
   mm_statCell(4,   154, 114, 54, "FEE (sat/vB)", data.halfHourFee);
-  mm_statCell(122, 154, 114, 54, "HALVING IN", data.remainingBlocks);
+  mm_statCell(122, 154, 114, 54, "HALVING IN", blocksLeftNum);
 
   // Halving progress bar
   mm_bg.drawRect(4, 212, 232, 18, MM_DARK);
@@ -316,9 +332,7 @@ static void minerMaker154_StatusScreen(void) {
   mm_bg.fillSprite(TFT_BLACK);
   mm_header("STATUS", data.currentTime);
 
-  mm_clipBegin(0, 58, 240, 40);
-  mm_bigNumber(data.currentTime, 120, 60, 30, 224, TFT_WHITE, TFT_BLACK);
-  mm_clipEnd();
+  mm_bigNumber(data.currentTime, 120, 60, 30, 224, 74, TFT_WHITE, TFT_BLACK);
 
   mm_statCell(4,   140, 114, 44, "HASHRATE", data.currentHashRate + " KH/s");
   mm_statCell(122, 140, 114, 44, "SHARES", data.completedShares);
