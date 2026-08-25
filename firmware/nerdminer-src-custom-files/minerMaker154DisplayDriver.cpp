@@ -29,18 +29,46 @@ static unsigned long lastAnimateDrawSec = 0;
 #define AUTO_WAKE_INTERVAL_MS (15UL * 60UL * 1000UL) // wake every 15 min...
 #define AUTO_WAKE_DURATION_MS (60UL * 1000UL)         // ...and stay on for 1 min
 
+// ---- backlight: PWM-driven, so on/off is a smooth fade rather than a hard cut ----
+#define MM_BL_CHANNEL 0
+#define MM_BL_FREQ    5000
+#define MM_BL_RES     8 // 8-bit duty: 0-255
+static int mm_blDuty = 0;
+
+static void mm_fadeBacklightTo(int target) {
+  target = constrain(target, 0, 255);
+  int step = (target >= mm_blDuty) ? 5 : -5;
+  while (mm_blDuty != target) {
+    mm_blDuty += step;
+    if ((step > 0 && mm_blDuty > target) || (step < 0 && mm_blDuty < target)) mm_blDuty = target;
+    ledcWrite(MM_BL_CHANNEL, mm_blDuty);
+    delay(8);
+  }
+}
+
 static void mm_setBacklight(bool on) {
   backlightOn = on;
-  digitalWrite(TFT_BL, on ? HIGH : LOW);
+  mm_fadeBacklightTo(on ? 255 : 0);
 }
 
 // ---- small drawing helpers ----------------------------------------------
 
-static void mm_wifiIcon(int x, int y, uint16_t color) {
-  // 3 ascending signal bars, ~14x10px
-  mm_bg.fillRect(x,     y + 6, 3, 4, color);
-  mm_bg.fillRect(x + 5, y + 3, 3, 7, color);
-  mm_bg.fillRect(x + 10, y,    3, 10, color);
+// bars: 0-3 signal strength (from RSSI), or -1 for "not connected"
+static void mm_wifiIcon(int x, int y, int bars) {
+  static const int barH[3] = {4, 7, 10};
+  static const int barY[3] = {6, 3, 0};
+  for (int i = 0; i < 3; i++) {
+    uint16_t c = (bars > i) ? TFT_WHITE : MM_DARK;
+    mm_bg.fillRect(x + i * 5, y + barY[i], 3, barH[i], c);
+  }
+}
+
+static int mm_wifiBars() {
+  if (WiFi.status() != WL_CONNECTED) return -1;
+  int rssi = WiFi.RSSI();
+  if (rssi > -60) return 3;
+  if (rssi > -70) return 2;
+  return 1;
 }
 
 static void mm_header(const char *title, const String &time) {
@@ -54,9 +82,8 @@ static void mm_header(const char *title, const String &time) {
   mm_bg.setTextDatum(TR_DATUM);
   mm_bg.drawString(time, 236, 4);
 
-  uint16_t wifiW = mm_bg.textWidth(time) ;
-  bool connected = (WiFi.status() == WL_CONNECTED);
-  mm_wifiIcon(236 - wifiW - 20, 5, connected ? TFT_WHITE : MM_GREY);
+  uint16_t wifiW = mm_bg.textWidth(time);
+  mm_wifiIcon(236 - wifiW - 20, 5, mm_wifiBars());
 }
 
 // Draws `value` centered on (cx, topY) using the digital font, returns its height
@@ -83,7 +110,9 @@ static void mm_statCell(int x, int y, int w, int h, const char *label, const Str
 
 void minerMaker154_Init(void) {
   Serial.println("MinerMaker 1.54 (240x240 ST7789 SPI) display driver initialized");
-  pinMode(TFT_BL, OUTPUT);
+  ledcSetup(MM_BL_CHANNEL, MM_BL_FREQ, MM_BL_RES);
+  ledcAttachPin(TFT_BL, MM_BL_CHANNEL);
+  mm_blDuty = 0;
   mm_setBacklight(true);
 
   mm_tft.init();
@@ -285,7 +314,7 @@ void minerMaker154_AnimateCurrentScreen(unsigned long frame) {
   if (!autoWaking && (now - lastOffMillis >= AUTO_WAKE_INTERVAL_MS)) {
     autoWaking = true;
     autoWakeStart = now;
-    digitalWrite(TFT_BL, HIGH); // temporary wake, doesn't flip `backlightOn`
+    mm_fadeBacklightTo(255); // temporary wake, doesn't flip `backlightOn`
   }
 
   if (autoWaking) {
@@ -297,7 +326,7 @@ void minerMaker154_AnimateCurrentScreen(unsigned long frame) {
     if (now - autoWakeStart >= AUTO_WAKE_DURATION_MS) {
       autoWaking = false;
       lastOffMillis = now; // restart the 15-min countdown from now
-      digitalWrite(TFT_BL, LOW);
+      mm_fadeBacklightTo(0);
     }
   }
 }

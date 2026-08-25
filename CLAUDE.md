@@ -152,6 +152,19 @@ documented above.
   expose them via `wManager.h`) then `ESP.restart()`, mirroring how the
   setup portal itself applies changes. Wi-Fi SSID/password are intentionally
   *not* editable here — those still require the full portal/reset flow.
+  Gated by fixed-constant HTTP Basic Auth (`MM_WEB_USER`/`MM_WEB_PASS`,
+  not stored in `TSettings`/not user-editable). Advertised via mDNS
+  (`ESPmDNS`, hostname `minermaker` → `minermaker.local:8080`), registered
+  once WiFi is first seen connected inside `minerMaker154_WebSettingsLoop()`.
+- **Backlight is PWM-driven** (ESP32 LEDC, channel `MM_BL_CHANNEL`) rather
+  than a plain `digitalWrite`, so on/off is a ~400ms fade
+  (`mm_fadeBacklightTo()`) — this uses the arduino-esp32 2.x channel-based
+  LEDC API (`ledcSetup`/`ledcAttachPin`/`ledcWrite(channel, duty)`), which
+  is what `platform = espressif32@6.6.0` pins (arduino-esp32 core ~2.0.14);
+  don't switch to the pin-based `ledcAttach(pin,...)` API from core 3.x
+  without also bumping the pinned platform version.
+- **Wi-Fi signal bars** in the header come from `WiFi.RSSI()` (`mm_wifiBars()`),
+  not just `WiFi.status()`.
 - `Setup999_MinerMaker154.h` is a `TFT_eSPI` `User_Setup` (ID 999) — pins,
   `ST7789_DRIVER`, BGR order, inversion-on, SPI frequencies. This is
   TFT_eSPI's own config layer; the `[env:MinerMaker154]` build additionally

@@ -5,6 +5,7 @@
 #include <Arduino.h>
 #include <WiFi.h>
 #include <WebServer.h>
+#include <ESPmDNS.h>
 #include "drivers/storage/storage.h"
 #include "drivers/storage/nvMemory.h"
 
@@ -17,6 +18,18 @@ extern nvMemory nvMem;
 static WebServer mmServer(8080);
 static bool mmServerStarted = false;
 
+// Fixed credentials for the settings page - not configurable, same trust
+// tier as the setup AP's own hardcoded password (MineYourCoins). Good
+// enough to keep it off casual snooping on the home LAN, nothing more.
+#define MM_WEB_USER "admin"
+#define MM_WEB_PASS "MinerMaker154"
+
+static bool mmRequireAuth() {
+  if (mmServer.authenticate(MM_WEB_USER, MM_WEB_PASS)) return true;
+  mmServer.requestAuthentication();
+  return false;
+}
+
 static String mmEsc(const String &in) {
   String out = in;
   out.replace("&", "&amp;");
@@ -27,6 +40,7 @@ static String mmEsc(const String &in) {
 }
 
 static void mmHandleRoot() {
+  if (!mmRequireAuth()) return;
   String html;
   html.reserve(2200);
   html += "<!doctype html><html><head><meta name=viewport content='width=device-width,initial-scale=1'>";
@@ -55,6 +69,7 @@ static void mmHandleRoot() {
 }
 
 static void mmHandleSave() {
+  if (!mmRequireAuth()) return;
   if (mmServer.hasArg("btc")) {
     strncpy(Settings.BtcWallet, mmServer.arg("btc").c_str(), sizeof(Settings.BtcWallet) - 1);
     Settings.BtcWallet[sizeof(Settings.BtcWallet) - 1] = 0;
@@ -95,6 +110,13 @@ void minerMaker154_WebSettingsLoop(void) {
     if (WiFi.status() != WL_CONNECTED) return;
     mmServer.begin();
     mmServerStarted = true;
+
+    if (MDNS.begin("minermaker")) {
+      MDNS.addService("http", "tcp", 8080);
+      Serial.println("MinerMaker154: settings page at http://minermaker.local:8080/");
+    } else {
+      Serial.println("MinerMaker154: mDNS init failed, use the IP address instead");
+    }
     Serial.print("MinerMaker154: settings page at http://");
     Serial.print(WiFi.localIP());
     Serial.println(":8080/");

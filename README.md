@@ -127,12 +127,21 @@ Beyond the base mining/clock screens, the `MinerMaker154` display driver adds:
   turns on by itself every 15 minutes, shows the time and current
   mining status for 1 minute, then turns back off — no button press needed
   to check on it occasionally. Press the button as usual to turn it on/off manually at any time.
-- **Settings web page**, reachable at `http://<device-ip>:8080/` once the
-  device has joined your Wi-Fi (find the IP from your router, or from the
-  serial monitor at boot) — lets you change the BTC address, pool URL/port/
+- **Settings web page**, reachable at `http://minermaker.local:8080/`
+  (mDNS — works on macOS/Linux out of the box; on Windows install [Bonjour](https://support.apple.com/en-us/106380)
+  or use the IP instead) or `http://<device-ip>:8080/` once the device has
+  joined your Wi-Fi — lets you change the BTC address, pool URL/port/
   password, and timezone **without** doing a full Wi-Fi/wallet reset
   (which would otherwise require redoing the whole `NerdMinerAP` portal).
   Wi-Fi credentials themselves still go through the normal setup portal.
+  Protected with HTTP Basic Auth (user `admin`, password `MinerMaker154` —
+  fixed, not configurable from the page itself; same trust tier as the
+  setup AP's own hardcoded password, i.e. enough to stop casual access on
+  your home LAN, not a real secret).
+- **Smooth backlight fade** instead of an instant on/off cut (PWM via the
+  ESP32's LEDC peripheral), for both the manual toggle and the auto-wake.
+- **Wi-Fi signal bars** in the header (from `WiFi.RSSI()`) instead of a
+  plain connected/not-connected dot.
 
 ## Directory structure
 
@@ -210,8 +219,8 @@ in a browser, select your home network, enter its password, and enter
 **your own BTC receiving address** (not an xpub!).
 
 Afterwards, the BTC address/pool/timezone can be changed anytime from
-`http://<device-ip>:8080/` (see "Custom UI & features" above) without
-repeating this whole portal flow.
+`http://minermaker.local:8080/` (user `admin` / password `MinerMaker154`,
+see "Custom UI & features" above) without repeating this whole portal flow.
 
 ### How to rebuild from source (if you need to change something in the firmware)
 
@@ -256,5 +265,7 @@ device does **not** reset them.
   "Compatibility & testing status".
 - Tune the auto-wake interval/duration (`AUTO_WAKE_INTERVAL_MS` /
   `AUTO_WAKE_DURATION_MS` in `minerMaker154DisplayDriver.cpp`) to taste.
-- The settings web page currently has no password — fine on a private home
-  network, but worth adding basic auth if you'd expose it further.
+- The settings-page password (`MM_WEB_USER`/`MM_WEB_PASS` in
+  `webSettings.cpp`) is a fixed constant, not editable from the page or the
+  setup portal — fine for a home LAN, but if you want it configurable
+  you'd add it as a new `TSettings` field alongside `BtcWallet` etc.
