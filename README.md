@@ -146,6 +146,8 @@ Beyond the base mining/clock screens, the `MinerMaker154` display driver adds:
   and then power-cycle the device, it comes back up with the screen still
   off (instead of always waking up lit). Stored in its own NVS namespace,
   separate from the wallet/pool settings.
+- **Larger clock digits** on the Clock screen (font size 74 vs. the
+  original 34) for better readability at a glance.
 - **Wi-Fi signal bars** in the header (from `WiFi.RSSI()`) instead of a
   plain connected/not-connected dot.
 

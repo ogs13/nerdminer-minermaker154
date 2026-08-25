@@ -209,11 +209,11 @@ void minerMaker154_ClockScreen(unsigned long mElapsed) {
   mm_bg.fillSprite(TFT_BLACK);
   mm_header("CLOCK", data.currentTime);
 
-  mm_bigNumber(data.currentTime, 120, 70, 34, MM_YELLOW, TFT_BLACK);
+  mm_bigNumber(data.currentTime, 120, 42, 74, MM_YELLOW, TFT_BLACK);
 
-  mm_statCell(4,   150, 232, 40, "BTC PRICE", data.btcPrice);
-  mm_statCell(4,   194, 114, 40, "HASHRATE (KH/s)", data.currentHashRate);
-  mm_statCell(122, 194, 114, 40, "SHARES", data.completedShares);
+  mm_statCell(4,   126, 232, 38, "BTC PRICE", data.btcPrice);
+  mm_statCell(4,   168, 114, 38, "HASHRATE (KH/s)", data.currentHashRate);
+  mm_statCell(122, 168, 114, 38, "SHARES", data.completedShares);
 
   mm_bg.pushSprite(0, 0);
 }
