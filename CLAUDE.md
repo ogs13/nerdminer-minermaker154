@@ -206,6 +206,19 @@ documented above.
   actually constrains plain `mm_bg.drawString()` calls (native TFT_eSPI
   text) — that's what `mm_statCell()` and the decorative-box wraps rely
   on, and why only measurement-based sizing works for the digital font.
+  **`OpenFontRender::getTextHeight()` is unreliable for strings containing
+  `:`** — confirmed on hardware (a third round of photos) that it
+  under-reports height for a colon-bearing string in this font
+  specifically (pure-digit strings like a block height measured and fit
+  correctly; `"HH:MM"` did not, even with the maxHeight fix above in
+  place). Any clock-like value should avoid `mm_bigNumber()`/
+  `OpenFontRender` entirely — use the bundled `DSEG7_Classic_Bold_{12,17,32}`
+  `GFXfont`s instead (`src/media/myFonts.h`) via the normal
+  `setFreeFont()`/`setTextSize()`/`textWidth()` path, which measures
+  correctly because it's the ordinary TFT_eSPI font engine, not
+  OpenFontRender. This is also what `mm_statCell()`'s values and the
+  Clock/Status screens' big time now use — don't reintroduce
+  `mm_bigNumber()` for anything that renders a colon.
 - **CSS gotcha**: don't reuse a `0xRRGGBB`-style RGB565 display color
   literal (e.g. `MM_YELLOW`/`0xFEA0`) as a CSS hex color string in
   `webSettings.cpp`'s HTML. A 4-hex-digit CSS color is `#RGBA` shorthand,

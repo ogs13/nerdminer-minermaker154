@@ -146,9 +146,12 @@ Beyond the base mining/clock screens, the `MinerMaker154` display driver adds:
   and then power-cycle the device, it comes back up with the screen still
   off (instead of always waking up lit). Stored in its own NVS namespace,
   separate from the wallet/pool settings.
-- **Larger clock digits** on the Clock screen (font size 60 vs. the
-  original 34) for better readability at a glance, sized to reliably fit
-  the panel width rather than a fixed guess.
+- **Full-screen Clock**: just a big time display (BTC price as a small
+  line above it, hashrate/shares as a small line below) instead of
+  competing with a stats grid for space - much more readable at a glance.
+- **Digital-display styling throughout**: every stat box value (not just
+  the hero hashrate/clock) now uses the same 7-segment-style font as the
+  reference vendor look, closer to the original photo.
 - **Overflow-safe layout**: every stat box now clips its own text instead
   of letting a long label/value bleed into its neighbour or off the right
   edge of the panel, and the big "hero" numbers (clock, hashrate, block
@@ -222,6 +225,16 @@ compiled:
   actual rendered height via `OpenFontRender::getTextHeight()` and shrink
   the font until it truly fits, instead of relying on a clip that silently
   didn't apply to it.
+- A *third* round of photos showed that fix worked for the Network
+  screen's block height (pure digits) but the Clock screen was still
+  overlapping - narrowing it down to strings containing `:`, specifically:
+  `OpenFontRender::getTextHeight()` under-reports the height of a string
+  with a colon in this font, so the auto-shrink loop thought it fit when
+  it didn't. Worked around by moving the Clock and auto-wake Status
+  screens off `OpenFontRender` entirely, onto the bundled `DSEG7` bitmap
+  `GFXfont` (a real GFXfont, sized via `setTextSize()`, measured with the
+  ordinary and reliable `textWidth()`) — see "Custom UI & features" for
+  the resulting full-screen Clock redesign.
 - Still not independently confirmed on hardware: the exact on-screen
   layout/spacing of the new screens, whether the setup-screen QR code
   scans cleanly on a real panel (that path only runs during initial Wi-Fi

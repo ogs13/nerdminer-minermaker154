@@ -132,9 +132,16 @@ static void mm_statCell(int x, int y, int w, int h, const char *label, const Str
   mm_bg.setTextDatum(TL_DATUM);
   mm_bg.drawString(label, x + 6, y + 4);
 
-  mm_bg.setFreeFont(&FreeSansBold9pt7b);
+  // Value in the same "digital display" 7-segment-style font as the hero
+  // numbers, like the reference vendor look - not just the big hashrate.
+  // This is a real GFXfont (unlike the DigitalNumbers/OpenFontRender path),
+  // so plain textWidth()/setFreeFont() sizing is reliable here.
   mm_bg.setTextColor(TFT_WHITE, TFT_BLACK);
   mm_bg.setTextDatum(BL_DATUM);
+  mm_bg.setFreeFont(&DSEG7_Classic_Bold_17);
+  if (mm_bg.textWidth(value) > w - 12) {
+    mm_bg.setFreeFont(&DSEG7_Classic_Bold_12);
+  }
   mm_bg.drawString(value, x + 6, y + h - 6);
   mm_clipEnd();
 }
@@ -240,14 +247,32 @@ void minerMaker154_ClockScreen(unsigned long mElapsed) {
   mm_bg.fillSprite(TFT_BLACK);
   mm_header("CLOCK", data.currentTime);
 
-  // maxHeight=68 keeps the digits clear of the BTC PRICE box starting at
-  // y=114, regardless of this font's actual glyph height at a given size
-  // (measured via getTextHeight(), not assumed - see mm_bigNumber comment).
-  mm_bigNumber(data.currentTime, 120, 40, 60, 224, 68, MM_YELLOW, TFT_BLACK);
+  mm_bg.setFreeFont(&FreeSans9pt7b);
+  mm_bg.setTextColor(MM_GREY, TFT_BLACK);
+  mm_bg.setTextDatum(TC_DATUM);
+  mm_bg.drawString("BTC " + data.btcPrice, 120, 22);
 
-  mm_statCell(4,   114, 232, 36, "BTC PRICE", data.btcPrice);
-  mm_statCell(4,   154, 114, 36, "HASHRATE", data.currentHashRate + " KH/s");
-  mm_statCell(122, 154, 114, 36, "SHARES", data.completedShares);
+  // Full-screen clock: nothing else competes with it for space, so it can
+  // just be as big as fits. Uses the DSEG7 bitmap GFXfont (a real GFXfont,
+  // scaled via setTextSize) rather than mm_bigNumber()/OpenFontRender -
+  // confirmed on hardware that OpenFontRender's getTextHeight() badly
+  // under-reports height specifically for strings containing ":", which
+  // is exactly what a clock is made of. textWidth() on a plain GFXfont
+  // doesn't have that problem, so measure-and-fit works reliably here.
+  mm_bg.setTextColor(MM_YELLOW, TFT_BLACK);
+  mm_bg.setTextDatum(MC_DATUM);
+  mm_bg.setFreeFont(&DSEG7_Classic_Bold_32);
+  mm_bg.setTextSize(3);
+  if (mm_bg.textWidth(data.currentTime) > 228) {
+    mm_bg.setTextSize(2);
+  }
+  mm_bg.drawString(data.currentTime, 120, 140);
+  mm_bg.setTextSize(1);
+
+  mm_bg.setFreeFont(&FreeSans9pt7b);
+  mm_bg.setTextColor(TFT_WHITE, TFT_BLACK);
+  mm_bg.setTextDatum(TC_DATUM);
+  mm_bg.drawString(data.currentHashRate + " KH/s  |  " + data.completedShares + " shares", 120, 210);
 
   mm_bg.pushSprite(0, 0);
 }
@@ -276,16 +301,19 @@ void minerMaker154_WifiInfoScreen(unsigned long mElapsed) {
   mm_bg.setTextDatum(TL_DATUM);
   mm_bg.drawString("SETTINGS PAGE", 10, 132);
 
-  mm_bg.setFreeFont(&FreeSans9pt7b);
+  // Smaller built-in font for the detail lines - the URLs were running
+  // right up against the box edge at FreeSans9pt7b.
+  mm_bg.setFreeFont(nullptr);
+  mm_bg.setTextFont(2);
   mm_bg.setTextColor(MM_YELLOW, MM_BLUE);
-  mm_bg.drawString("http://" MM_WEB_HOST ":" MM_WEB_PORT_S "/", 10, 154);
+  mm_bg.drawString("http://" MM_WEB_HOST ":" MM_WEB_PORT_S "/", 10, 156);
   mm_bg.setTextColor(TFT_WHITE, MM_BLUE);
   String ipLine = connected ? (String("or http://") + ip + ":" MM_WEB_PORT_S "/") : String("(connect to Wi-Fi first)");
   mm_bg.drawString(ipLine, 10, 172);
 
   mm_bg.setTextColor(TFT_WHITE, MM_BLUE);
-  mm_bg.drawString(String("user: ") + MM_WEB_USER, 10, 196);
-  mm_bg.drawString(String("pass: ") + MM_WEB_PASS, 10, 214);
+  mm_bg.drawString(String("user: ") + MM_WEB_USER, 10, 194);
+  mm_bg.drawString(String("pass: ") + MM_WEB_PASS, 10, 210);
   mm_clipEnd();
 
   mm_bg.pushSprite(0, 0);
@@ -332,7 +360,15 @@ static void minerMaker154_StatusScreen(void) {
   mm_bg.fillSprite(TFT_BLACK);
   mm_header("STATUS", data.currentTime);
 
-  mm_bigNumber(data.currentTime, 120, 60, 30, 224, 74, TFT_WHITE, TFT_BLACK);
+  // DSEG7 GFXfont, not mm_bigNumber()/OpenFontRender - see the Clock
+  // screen comment: OpenFontRender's height measurement is unreliable for
+  // strings containing ":".
+  mm_bg.setTextColor(TFT_WHITE, TFT_BLACK);
+  mm_bg.setTextDatum(MC_DATUM);
+  mm_bg.setFreeFont(&DSEG7_Classic_Bold_32);
+  mm_bg.setTextSize(2);
+  mm_bg.drawString(data.currentTime, 120, 90);
+  mm_bg.setTextSize(1);
 
   mm_statCell(4,   140, 114, 44, "HASHRATE", data.currentHashRate + " KH/s");
   mm_statCell(122, 140, 114, 44, "SHARES", data.completedShares);
