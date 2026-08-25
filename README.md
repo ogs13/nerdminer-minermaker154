@@ -163,21 +163,32 @@ esp32_miner/
 
 ## Compatibility & testing status
 
-Two different levels of "tested" apply here, and it's worth being precise
-about which is which:
+Both the base mining firmware and the UI update described above have now
+been **flashed to and run on a real physical unit** (mine), not just
+compiled:
 
-- The **base mining firmware** (Wi-Fi setup, pool connection, mining,
-  original plain-text screens) has been flashed and run on **one physical
-  unit** (mine, 12h+ of continuous mining) — hardware-verified, not just compiled.
-- The **UI update described above** (restyled screens, Network screen, QR
-  code, true backlight-off, auto-wake, settings web page) compiles cleanly
-  and successfully with PlatformIO against this exact `MinerMaker154`
-  environment — but has **not yet been flashed to a physical device**. The
-  logic follows patterns already used elsewhere in NerdMiner_v2 (e.g. the
-  sprite-based flicker fix, the backlight toggle) rather than anything
-  novel, but things like exact on-screen layout/spacing, whether the QR
-  code actually scans cleanly on a real panel, and whether the 15-minute
-  auto-wake timing feels right can only be confirmed by actually flashing it.
+- The base mining firmware ran 12h+ continuously before the UI update.
+- The UI update (restyled screens, Network screen, QR code, true
+  backlight-off, auto-wake, settings web page) was flashed on top using
+  `scripts/safe_reflash.sh` (app-partition-only, no erase) and confirmed
+  booting and mining normally afterward, with the pre-existing wallet/pool/
+  Wi-Fi settings and the mining stat counters (accumulated over the prior
+  12h) intact and unaffected by the update.
+- Still not independently confirmed on hardware: the exact on-screen
+  layout/spacing of the new screens, whether the setup-screen QR code
+  scans cleanly on a real panel (that path only runs during initial Wi-Fi
+  setup, not exercised by an in-place update), and whether the 15-minute
+  auto-wake timing feels right day-to-day.
+
+**A note for anyone using `scripts/safe_reflash.sh`'s backup feature:**
+on this unit, `esptool`'s `read-flash` reliably stalled
+(`Packet content transfer stopped`) at the same absolute flash address on
+every attempt, regardless of baud rate or where the read started - a
+quirk of continuous reads over this chip's native USB-Serial/JTAG mode,
+not a bad cable. The script now reads the backup in small chunks (separate
+connections) to work around it; `write-flash` itself was unaffected (it
+uses a different, block-acknowledged protocol and self-verifies via a
+hash check) and completed correctly on the first try.
 
 It should work as-is on any board matching the hardware description above
 (same "ESP32S3 1.54 TFT LCD V1.0" / ZJYUNJIE board, same ESP32-S3-WROOM-1
@@ -288,9 +299,9 @@ device does **not** reset them.
 
 ## Possible next steps (not done, optional)
 
-- Flash the UI update described above to a physical unit and confirm the
-  layout, QR code scanning, and auto-wake timing look/feel right — see
-  "Compatibility & testing status".
+- Confirm the setup-screen QR code actually scans well on a real phone
+  camera (only exercised on a fresh Wi-Fi setup, not an in-place update —
+  see "Compatibility & testing status").
 - Tune the auto-wake interval/duration (`AUTO_WAKE_INTERVAL_MS` /
   `AUTO_WAKE_DURATION_MS` in `minerMaker154DisplayDriver.cpp`) to taste.
 - The settings-page password (`MM_WEB_USER`/`MM_WEB_PASS` in

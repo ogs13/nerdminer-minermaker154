@@ -174,6 +174,19 @@ documented above.
   but swaps in `-D MINERMAKER154=1` instead of `-D NERDMINERV2=1`, and adds
   `ricmoo/QRCode` to `lib_deps`.
 
+## Known gotcha: esptool read-flash stalls on this board's native USB-JTAG
+
+Confirmed by actually flashing a real unit: `esptool read-flash` of a large
+region reliably stalls (`Packet content transfer stopped`) at the same
+absolute flash address every time, independent of baud rate or where the
+read started — a quirk of continuous reads over the ESP32-S3's native
+USB-Serial/JTAG mode on this board, not a bad cable/link. `write-flash` is
+unaffected (different, block-acknowledged protocol; self-verifies via a
+hash check) and completed cleanly on the first try. `scripts/safe_reflash.sh`
+works around this by reading its pre-update backup in small chunks
+(separate connections per chunk) instead of one continuous read. Keep this
+in mind before adding any other read-flash-based tooling for this board.
+
 ## Known gotcha: wallet address field
 
 The pool (`public-pool.io:3333`) silently rejects an **xpub/ypub/zpub**

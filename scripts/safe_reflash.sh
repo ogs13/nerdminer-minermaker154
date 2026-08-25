@@ -120,28 +120,59 @@ if [ "$ASSUME_YES" -ne 1 ]; then
 fi
 
 # ---- 5. backup ---------------------------------------------------------------
+# NOTE: on at least one MinerMaker154 unit, esptool's read-flash reliably
+# stalls ("Packet content transfer stopped") at the same absolute flash
+# address every time on this board's native USB-Serial/JTAG, regardless of
+# baud rate or where the read started - looks like a device/esptool quirk
+# specific to continuous reads over this USB mode, not a bad cable/link.
+# Reading in small chunks (separate connections) works around it reliably.
 if [ "$DO_BACKUP" -eq 1 ]; then
   BACKUP_DIR="$REPO_DIR/backups"
   mkdir -p "$BACKUP_DIR"
   BACKUP_FILE="$BACKUP_DIR/full-flash-backup-$(date +%Y%m%d-%H%M%S).bin"
+  CHUNK=262144   # 256KB per connection - comfortably under where the stall was observed
+  : > "$BACKUP_FILE"
   echo "Backing up the full 8MB flash to: $BACKUP_FILE"
-  echo "(takes a minute or two over serial - do not disconnect the device)"
-  "$ESPTOOL" --port "$PORT" read-flash 0x0 "$FLASH_SIZE_BYTES" "$BACKUP_FILE"
-  echo "Backup done. To restore it if anything goes wrong:"
-  echo "  $ESPTOOL --port $PORT write-flash 0x0 $BACKUP_FILE"
+  echo "(reads in 256KB chunks to work around a USB-JTAG read stall seen on"
+  echo " this board - takes a couple of minutes, do not disconnect the device)"
+  OFFSET=0
+  BACKUP_OK=1
+  while [ "$OFFSET" -lt "$FLASH_SIZE_BYTES" ]; do
+    TMP="$(mktemp)"
+    if ! "$ESPTOOL" --port "$PORT" --baud 460800 read-flash "$OFFSET" "$CHUNK" "$TMP" >/tmp/safe_reflash_chunk.log 2>&1; then
+      echo "Backup read failed at offset $OFFSET:" >&2
+      tail -5 /tmp/safe_reflash_chunk.log >&2
+      rm -f "$TMP"
+      BACKUP_OK=0
+      break
+    fi
+    cat "$TMP" >> "$BACKUP_FILE"
+    rm -f "$TMP"
+    OFFSET=$((OFFSET + CHUNK))
+    printf "\r  %d / %d bytes" "$OFFSET" "$FLASH_SIZE_BYTES"
+  done
+  echo
+  if [ "$BACKUP_OK" -eq 1 ]; then
+    echo "Backup done. To restore it if anything goes wrong:"
+    echo "  $ESPTOOL --port $PORT write-flash 0x0 $BACKUP_FILE"
+  else
+    echo "Backup incomplete - continuing without one (rm -f \"$BACKUP_FILE\")." >&2
+    echo "You can still recover via git history of firmware/MinerMaker154_firmware.bin" >&2
+    echo "if this repo tracked the currently-installed build." >&2
+    rm -f "$BACKUP_FILE"
+  fi
 else
   echo "Skipping backup (--no-backup given)."
 fi
 
 # ---- 6. write only the app partition -----------------------------------------
+# write-flash validates itself via a hash check ("Hash of data verified"),
+# using a different, block-acknowledged protocol than read-flash/verify-flash
+# - so it isn't affected by the read stall above, and a separate verify-flash
+# pass afterward would just risk hitting the same stall for no extra safety.
 echo
 echo "Writing app partition..."
 "$ESPTOOL" --port "$PORT" --baud 460800 write-flash "$APP_OFFSET" "$FW_BIN"
-
-# ---- 7. verify -----------------------------------------------------------------
-echo
-echo "Verifying..."
-"$ESPTOOL" --port "$PORT" verify-flash "$APP_OFFSET" "$FW_BIN"
 
 echo
 echo "Done. Wi-Fi credentials, wallet/pool/timezone settings, and saved"
