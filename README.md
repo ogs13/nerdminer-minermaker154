@@ -110,10 +110,34 @@ esp32_miner/
     └── nerdminer-src-custom-files/— custom files added to NerdMiner_v2 (see below)
 ```
 
+## Compatibility & testing status
+
+The prebuilt binary in `firmware/` has only been flashed and verified on
+**one physical unit** (mine, ~12h of continuous mining as of this writing).
+It should work as-is on any board that matches the hardware description
+above (same "ESP32S3 1.54 TFT LCD V1.0" / ZJYUNJIE board, same
+ESP32-S3-WROOM-1 **N8R8** chip variant, same pinout) — the firmware doesn't
+do anything unit-specific, and the pinout was verified against the seller's
+own `interface.txt`, not guessed. But since this is a generic board sourced
+from AliExpress, there could in principle be undocumented hardware
+revisions (different flash/PSRAM size, a shifted pin) that this hasn't been
+tested against.
+
+**If you flash this on the same board and it works (or doesn't), please
+open an issue** — that feedback is exactly what turns "works on my unit"
+into "confirmed working for this board."
+
 ## How to reflash (if needed)
 
-Requires `esptool` (`pip install esptool`) and access to `/dev/ttyACM0`
-(the `uucp` group).
+Requires `esptool` (`pip install esptool`) and a serial port to the device:
+
+- Linux: `/dev/ttyACM0` (add your user to the `uucp` group, or whichever
+  group owns serial devices on your distro, for permission to access it)
+- macOS: something like `/dev/cu.usbmodemXXXX`
+- Windows: a `COMx` port
+
+The board uses native USB-Serial/JTAG, so it should enumerate without
+extra USB-UART drivers.
 
 ```bash
 # full flash erase
@@ -122,6 +146,8 @@ esptool --port /dev/ttyACM0 erase-flash
 # flash the combined image in one shot
 esptool --port /dev/ttyACM0 --baud 460800 write-flash 0x0 firmware/MinerMaker154_factory.bin
 ```
+
+(replace `/dev/ttyACM0` with your actual port)
 
 After flashing: connect over Wi-Fi to the **`NerdMinerAP`** access point,
 open **`192.168.4.1`** in a browser, select your home network, enter its
