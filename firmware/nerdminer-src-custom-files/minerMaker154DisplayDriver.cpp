@@ -32,8 +32,9 @@ static unsigned long lastOffMillis = 0;
 static unsigned long autoWakeStart = 0;
 static unsigned long lastAnimateDrawSec = 0;
 
-#define AUTO_WAKE_INTERVAL_MS (15UL * 60UL * 1000UL) // wake every 15 min...
+#define AUTO_WAKE_INTERVAL_MS (30UL * 60UL * 1000UL) // wake every 30 min...
 #define AUTO_WAKE_DURATION_MS (60UL * 1000UL)         // ...and stay on for 1 min
+#define AUTO_WAKE_CLOCK_MS    (45UL * 1000UL)         // ...45s of which is the clock, the rest the main screen
 
 // ---- backlight: PWM-driven, so on/off is a smooth fade rather than a hard cut ----
 #define MM_BL_CHANNEL 0
@@ -225,6 +226,15 @@ void minerMaker154_AlternateRotation(void) {
 }
 
 void minerMaker154_MinerScreen(unsigned long mElapsed) {
+  // Upstream's runMonitor() task calls the currently-selected cyclic screen
+  // once a second REGARDLESS of backlight state - normally harmless since
+  // nothing is visible with the backlight off, but during the periodic
+  // auto-wake (see AnimateCurrentScreen below) that background call would
+  // race against our own direct calls into these screens, each on its own
+  // unsynced ~1s timer, and visibly flicker between whatever they drew.
+  // Block it here; AnimateCurrentScreen calls these directly (bypassing
+  // this guard via `autoWaking`) when it actually wants them drawn.
+  if (!backlightOn && !autoWaking) return;
   mining_data data = getMiningData(mElapsed);
 
   mm_bg.fillSprite(TFT_BLACK);
@@ -267,6 +277,8 @@ void minerMaker154_MinerScreen(unsigned long mElapsed) {
 }
 
 void minerMaker154_ClockScreen(unsigned long mElapsed) {
+  // See the comment in minerMaker154_MinerScreen - same background-draw race.
+  if (!backlightOn && !autoWaking) return;
   clock_data data = getClockData(mElapsed);
 
   mm_bg.fillSprite(TFT_BLACK);
@@ -306,6 +318,8 @@ void minerMaker154_ClockScreen(unsigned long mElapsed) {
 }
 
 void minerMaker154_WifiInfoScreen(unsigned long mElapsed) {
+  // See the comment in minerMaker154_MinerScreen - same background-draw race.
+  if (!backlightOn && !autoWaking) return;
   clock_data data = getClockData(mElapsed); // only used for the header clock
 
   mm_bg.fillSprite(TFT_BLACK);
@@ -348,6 +362,8 @@ void minerMaker154_WifiInfoScreen(unsigned long mElapsed) {
 }
 
 void minerMaker154_GlobalHashScreen(unsigned long mElapsed) {
+  // See the comment in minerMaker154_MinerScreen - same background-draw race.
+  if (!backlightOn && !autoWaking) return;
   coin_data data = getCoinData(mElapsed);
 
   mm_bg.fillSprite(TFT_BLACK);
@@ -377,33 +393,6 @@ void minerMaker154_GlobalHashScreen(unsigned long mElapsed) {
   mm_bg.setTextColor(TFT_BLACK, MM_YELLOW);
   mm_bg.setTextDatum(TC_DATUM);
   mm_bg.drawString("Halving " + String(data.progressPercent, 1) + "%", 120, 214);
-
-  mm_bg.pushSprite(0, 0);
-}
-
-// Not part of the normal click cycle - only shown during the periodic auto-wake (see animate below)
-static void minerMaker154_StatusScreen(void) {
-  clock_data data = getClockData(1000);
-
-  mm_bg.fillSprite(TFT_BLACK);
-  mm_header("STATUS", data.currentTime);
-
-  // DSEG7 GFXfont, not mm_bigNumber()/OpenFontRender - see the Clock
-  // screen comment: OpenFontRender's height measurement is unreliable for
-  // strings containing ":".
-  mm_bg.setTextColor(TFT_WHITE, TFT_BLACK);
-  mm_bg.setTextDatum(MC_DATUM);
-  mm_bg.setFreeFont(&DSEG7_Classic_Bold_32);
-  mm_bg.setTextSize(2);
-  mm_bg.drawString(data.currentTime, 120, 90);
-  mm_bg.setTextSize(1);
-
-  mm_statCell(4,   140, 114, 44, "HASHRATE", data.currentHashRate + " KH/s");
-  mm_statCell(122, 140, 114, 44, "SHARES", data.completedShares);
-  mm_bg.setFreeFont(&FreeSans9pt7b);
-  mm_bg.setTextColor(MM_GREY, TFT_BLACK);
-  mm_bg.setTextDatum(TC_DATUM);
-  mm_bg.drawString("(auto screen-on, sleeping again shortly)", 120, 200);
 
   mm_bg.pushSprite(0, 0);
 }
@@ -482,11 +471,21 @@ void minerMaker154_AnimateCurrentScreen(unsigned long frame) {
     unsigned long nowSec = now / 1000UL;
     if (nowSec != lastAnimateDrawSec) {
       lastAnimateDrawSec = nowSec;
-      minerMaker154_StatusScreen();
+      // Own the whole wake window directly (bypassing each screen's
+      // `!backlightOn && !autoWaking` guard, since autoWaking is true) so
+      // nothing else races to draw over it: clock first, then the main
+      // screen, on a schedule we fully control - not whatever cyclic
+      // screen happened to be selected before the backlight went off.
+      unsigned long elapsedInWindow = now - autoWakeStart;
+      if (elapsedInWindow < AUTO_WAKE_CLOCK_MS) {
+        minerMaker154_ClockScreen(1000);
+      } else {
+        minerMaker154_MinerScreen(1000);
+      }
     }
     if (now - autoWakeStart >= AUTO_WAKE_DURATION_MS) {
       autoWaking = false;
-      lastOffMillis = now; // restart the 15-min countdown from now
+      lastOffMillis = now; // restart the 30-min countdown from now
       mm_fadeBacklightTo(0);
     }
   }

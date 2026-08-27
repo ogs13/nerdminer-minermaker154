@@ -136,6 +136,20 @@ documented above.
     mining/backlight state — this is also where `minerMaker154_WebSettingsLoop()`
     gets serviced, since there's no other per-tick hook available without
     editing upstream's `NerdMinerV2.ino.cpp`.
+    During auto-wake it shows the Clock screen for `AUTO_WAKE_CLOCK_MS`
+    (45s) then the Mining screen for the rest of `AUTO_WAKE_DURATION_MS`
+    (60s total), calling `minerMaker154_ClockScreen()`/`_MinerScreen()`
+    directly. **Every cyclic screen function (`_MinerScreen`,
+    `_ClockScreen`, `_GlobalHashScreen`, `_WifiInfoScreen`) starts with
+    `if (!backlightOn && !autoWaking) return;`** — without this,
+    upstream's `runMonitor()` task keeps calling
+    `drawCurrentScreen()` → whichever cyclic screen is currently selected
+    once a second *regardless of backlight state* (see the sprite-flicker
+    bullet above), and during auto-wake that background call raced
+    against this file's own direct calls on an unsynced ~1s timer,
+    visibly flickering between the two screens roughly every half second.
+    Confirmed and fixed on hardware. If you add a 5th cyclic screen, give
+    it the same guard.
   - The **setup screen's QR code** uses the `ricmoo/QRCode` library
     (`lib_deps` in `platformio.ini`) to encode
     `WIFI:T:WPA;S:NerdMinerAP;P:MineYourCoins;;` — `NerdMinerAP` /

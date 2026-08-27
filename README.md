@@ -126,9 +126,10 @@ Beyond the base mining/clock screens, the `MinerMaker154` display driver adds:
   reliably cuts power to the backlight (not just a dark screen with the
   light still on).
 - **Auto screen-on:** while the backlight is off, it now automatically
-  turns on by itself every 15 minutes, shows the time and current
-  mining status for 1 minute, then turns back off — no button press needed
-  to check on it occasionally. Press the button as usual to turn it on/off manually at any time.
+  turns on by itself every 30 minutes, shows the Clock screen for 45
+  seconds then the main Mining screen for 15 seconds, then turns back
+  off — no button press needed to check on it occasionally. Press the
+  button as usual to turn it on/off manually at any time.
 - **Settings web page**, reachable at `http://minermaker.local:8080/`
   (mDNS — works on macOS/Linux out of the box; on Windows install [Bonjour](https://support.apple.com/en-us/106380)
   or use the IP instead) or `http://<device-ip>:8080/` once the device has
@@ -307,8 +308,9 @@ takes up to 700ms (was 400ms) to register, since the button can't tell
 it's "just one click" until that window passes without a follow-up press.
 
 While the backlight is off, the screen automatically wakes itself up for
-1 minute every 15 minutes to show the time and mining status, then turns
-back off — this doesn't count as a manual toggle and doesn't reset the timer.
+1 minute every 30 minutes — 45 seconds on the Clock screen, then 15
+seconds on the main Mining screen — then turns back off. This doesn't
+count as a manual toggle and doesn't reset the timer.
 
 Settings are stored in SPIFFS (flash memory), so simply power-cycling the
 device does **not** reset them.
