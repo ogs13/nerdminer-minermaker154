@@ -32,6 +32,21 @@ static unsigned long lastOffMillis = 0;
 static unsigned long autoWakeStart = 0;
 static unsigned long lastAnimateDrawSec = 0;
 
+// Which screen the auto-wake sequence currently wants on-panel. `autoWaking`
+// alone isn't enough to tell a screen function "it's your turn": it's a
+// single global flag that's equally true for BOTH the intentional direct
+// call below AND upstream's own background drawCurrentScreen() call (which
+// keeps firing once a second regardless of backlight state, see the
+// comments on each screen function) - so during the whole auto-wake window
+// that background call was slipping past the `!backlightOn && !autoWaking`
+// guard too, drawing whatever `current_cyclic_screen` happened to be
+// selected (Miner, index 0, by default) UNDERNEATH our own direct Clock
+// calls once a second, each on its own unsynced timer -> visible flicker.
+// This tracks which of the two auto-wake screens is actually due right now
+// so each of them can reject the *other* one's stray background call.
+enum { MM_AUTOWAKE_NONE, MM_AUTOWAKE_CLOCK, MM_AUTOWAKE_MINER };
+static int autoWakeActiveScreen = MM_AUTOWAKE_NONE;
+
 #define AUTO_WAKE_INTERVAL_MS (30UL * 60UL * 1000UL) // wake every 30 min...
 #define AUTO_WAKE_DURATION_MS (60UL * 1000UL)         // ...and stay on for 1 min
 #define AUTO_WAKE_CLOCK_MS    (45UL * 1000UL)         // ...45s of which is the clock, the rest the main screen
@@ -232,9 +247,10 @@ void minerMaker154_MinerScreen(unsigned long mElapsed) {
   // auto-wake (see AnimateCurrentScreen below) that background call would
   // race against our own direct calls into these screens, each on its own
   // unsynced ~1s timer, and visibly flicker between whatever they drew.
-  // Block it here; AnimateCurrentScreen calls these directly (bypassing
-  // this guard via `autoWaking`) when it actually wants them drawn.
-  if (!backlightOn && !autoWaking) return;
+  // Block it whenever it's not actually this screen's turn - `autoWaking`
+  // alone isn't enough, since it's equally true for upstream's stray
+  // background call (see autoWakeActiveScreen comment above).
+  if (!backlightOn && (!autoWaking || autoWakeActiveScreen != MM_AUTOWAKE_MINER)) return;
   mining_data data = getMiningData(mElapsed);
 
   mm_bg.fillSprite(TFT_BLACK);
@@ -278,7 +294,7 @@ void minerMaker154_MinerScreen(unsigned long mElapsed) {
 
 void minerMaker154_ClockScreen(unsigned long mElapsed) {
   // See the comment in minerMaker154_MinerScreen - same background-draw race.
-  if (!backlightOn && !autoWaking) return;
+  if (!backlightOn && (!autoWaking || autoWakeActiveScreen != MM_AUTOWAKE_CLOCK)) return;
   clock_data data = getClockData(mElapsed);
 
   mm_bg.fillSprite(TFT_BLACK);
@@ -319,7 +335,10 @@ void minerMaker154_ClockScreen(unsigned long mElapsed) {
 
 void minerMaker154_WifiInfoScreen(unsigned long mElapsed) {
   // See the comment in minerMaker154_MinerScreen - same background-draw race.
-  if (!backlightOn && !autoWaking) return;
+  // Never part of the auto-wake sequence (only Clock/Miner are), so unlike
+  // those two this blocks unconditionally whenever the backlight is off,
+  // autoWaking or not.
+  if (!backlightOn) return;
   clock_data data = getClockData(mElapsed); // only used for the header clock
 
   mm_bg.fillSprite(TFT_BLACK);
@@ -363,7 +382,10 @@ void minerMaker154_WifiInfoScreen(unsigned long mElapsed) {
 
 void minerMaker154_GlobalHashScreen(unsigned long mElapsed) {
   // See the comment in minerMaker154_MinerScreen - same background-draw race.
-  if (!backlightOn && !autoWaking) return;
+  // Never part of the auto-wake sequence (only Clock/Miner are), so unlike
+  // those two this blocks unconditionally whenever the backlight is off,
+  // autoWaking or not.
+  if (!backlightOn) return;
   coin_data data = getCoinData(mElapsed);
 
   mm_bg.fillSprite(TFT_BLACK);
@@ -478,13 +500,16 @@ void minerMaker154_AnimateCurrentScreen(unsigned long frame) {
       // screen happened to be selected before the backlight went off.
       unsigned long elapsedInWindow = now - autoWakeStart;
       if (elapsedInWindow < AUTO_WAKE_CLOCK_MS) {
+        autoWakeActiveScreen = MM_AUTOWAKE_CLOCK;
         minerMaker154_ClockScreen(1000);
       } else {
+        autoWakeActiveScreen = MM_AUTOWAKE_MINER;
         minerMaker154_MinerScreen(1000);
       }
     }
     if (now - autoWakeStart >= AUTO_WAKE_DURATION_MS) {
       autoWaking = false;
+      autoWakeActiveScreen = MM_AUTOWAKE_NONE;
       lastOffMillis = now; // restart the 30-min countdown from now
       mm_fadeBacklightTo(0);
     }

@@ -139,17 +139,38 @@ documented above.
     During auto-wake it shows the Clock screen for `AUTO_WAKE_CLOCK_MS`
     (45s) then the Mining screen for the rest of `AUTO_WAKE_DURATION_MS`
     (60s total), calling `minerMaker154_ClockScreen()`/`_MinerScreen()`
-    directly. **Every cyclic screen function (`_MinerScreen`,
-    `_ClockScreen`, `_GlobalHashScreen`, `_WifiInfoScreen`) starts with
-    `if (!backlightOn && !autoWaking) return;`** — without this,
-    upstream's `runMonitor()` task keeps calling
-    `drawCurrentScreen()` → whichever cyclic screen is currently selected
-    once a second *regardless of backlight state* (see the sprite-flicker
-    bullet above), and during auto-wake that background call raced
-    against this file's own direct calls on an unsynced ~1s timer,
-    visibly flickering between the two screens roughly every half second.
-    Confirmed and fixed on hardware. If you add a 5th cyclic screen, give
-    it the same guard.
+    directly. Every cyclic screen function (`_MinerScreen`, `_ClockScreen`,
+    `_GlobalHashScreen`, `_WifiInfoScreen`) guards itself against upstream's
+    `runMonitor()` task, which keeps calling `drawCurrentScreen()` →
+    whichever cyclic screen is currently selected (`current_cyclic_screen`,
+    defaults to index 0 = Miner) once a second *regardless of backlight
+    state* (see the sprite-flicker bullet above).
+    **A first attempt guarded every screen with just
+    `if (!backlightOn && !autoWaking) return;` and that was NOT enough** —
+    confirmed on hardware (two rounds of on-device observation): during
+    auto-wake, `autoWaking` is a single global flag, equally true for both
+    the intentional direct call below AND upstream's stray background
+    call, so that background call sailed straight past the guard too and
+    kept drawing `current_cyclic_screen` (Miner, by default) once a second
+    *underneath* this file's own direct Clock calls — the two screens
+    raced on unsynced ~1s timers for the entire 45s clock window, visibly
+    flickering roughly twice a second. The 15s Miner window looked fine
+    only by coincidence: both the background call and the direct call were
+    drawing the same screen there. Fixed with an explicit
+    `autoWakeActiveScreen` enum (`MM_AUTOWAKE_NONE`/`_CLOCK`/`_MINER`) that
+    `AnimateCurrentScreen` sets immediately before each direct call; each
+    of `_MinerScreen`/`_ClockScreen`'s guards now checks
+    `autoWakeActiveScreen` too (`if (!backlightOn && (!autoWaking ||
+    autoWakeActiveScreen != MM_AUTOWAKE_MINER)) return;` and the Clock
+    equivalent) so a screen only actually draws when it's genuinely its
+    turn, rejecting the other screen's stray background call.
+    `_WifiInfoScreen`/`_GlobalHashScreen` are never part of the auto-wake
+    sequence, so they were simplified to block unconditionally whenever
+    the backlight is off (`if (!backlightOn) return;`) rather than
+    special-casing `autoWaking` at all. Confirmed fixed on hardware. If you
+    add a screen to the auto-wake sequence, give it its own
+    `MM_AUTOWAKE_*` value and check it the same way; any other cyclic
+    screen just needs the unconditional `if (!backlightOn) return;`.
   - The **setup screen's QR code** uses the `ricmoo/QRCode` library
     (`lib_deps` in `platformio.ini`) to encode
     `WIFI:T:WPA;S:NerdMinerAP;P:MineYourCoins;;` — `NerdMinerAP` /
